@@ -29,6 +29,19 @@ export async function requirePairingToken(db: Db, request: FastifyRequest) {
   return pairing;
 }
 
+/** Autentica o site (servidor do Next) pelo header Authorization: Bearer <token de sessão>. */
+export async function requireSession(db: Db, request: FastifyRequest) {
+  const header = headerValue(request, "authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+  if (!token) throw new HttpError(401, "Sessão ausente");
+
+  const session = await db.session.findUnique({ where: { tokenHash: hashToken(token) } });
+  if (!session || session.expiresAt.getTime() < Date.now()) {
+    throw new HttpError(401, "Sessão inválida ou expirada");
+  }
+  return session;
+}
+
 /** Protege rotas internas chamadas pelo Cloud Scheduler (header X-Jobs-Secret). */
 export function requireJobsSecret(request: FastifyRequest, expected: string): void {
   const provided = headerValue(request, "x-jobs-secret");

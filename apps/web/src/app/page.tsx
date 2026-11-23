@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Radar, ShieldAlert, Scale, Wifi } from "lucide-react";
+import { ArrowRight, Radar, ShieldAlert, Scale, Wifi } from "lucide-react";
+import { enterDemo } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getApiHealth } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,18 @@ const PILLARS = [
   },
 ];
 
-export default async function Home() {
+const NOTICES: Record<string, string> = {
+  demo: "Não foi possível abrir a demo agora. Tente de novo em alguns segundos.",
+  expirada: "Sua sessão expirou. Entre de novo para continuar.",
+};
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ erro?: string; sessao?: string }>;
+}) {
+  const params = await searchParams;
+  const notice = NOTICES[params.erro ?? ""] ?? NOTICES[params.sessao ?? ""];
   const health = await getApiHealth();
   const apiOk = health.online && health.database === "ok";
 
@@ -56,16 +68,24 @@ export default async function Home() {
             mostra o que a sua rede e o seu computador deixam exposto.
           </p>
           <div className="flex flex-wrap gap-3">
-            <span
-              aria-disabled
-              className={cn(buttonVariants({ size: "lg" }), "pointer-events-none opacity-60")}
-            >
-              Entrar como demo (em breve)
-            </span>
+            <form action={enterDemo}>
+              <SubmitButton size="lg" pendingText="Abrindo a demo...">
+                Entrar como demo
+                <ArrowRight data-icon="inline-end" aria-hidden />
+              </SubmitButton>
+            </form>
             <Link href="#como-funciona" className={buttonVariants({ size: "lg", variant: "outline" })}>
               Como funciona
             </Link>
           </div>
+          {notice && (
+            <p role="status" className="text-sm text-red-600">
+              {notice}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Sem cadastro: a demo abre o painel de uma persona fictícia, com vazamentos e redes simulados.
+          </p>
         </section>
 
         <section id="como-funciona" className="grid gap-4 sm:grid-cols-3">

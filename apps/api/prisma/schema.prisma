@@ -42,6 +42,7 @@ model User {
   assets        Asset[]
   pairingTokens PairingToken[]
   networkScans  NetworkScan[]
+  sessions      Session[]
 }
 
 /// Identificador que o usuário monitora. Só entra no monitoramento depois de verificado.
@@ -115,6 +116,19 @@ model PairingToken {
   expiresAt  DateTime
   lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
+}
+
+/// Sessão do site. O cookie (httpOnly) guarda o token; o banco guarda só o SHA-256 dele.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model NetworkScan {

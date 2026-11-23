@@ -2,10 +2,11 @@
  * Popula o banco com dados 100% sintéticos para desenvolvimento e para a demo do júri:
  * - persona fictícia com e-mail, CPF e telefone já verificados;
  * - três vazamentos de empresas fictícias, com identificadores aleatórios guardados só como HMAC;
+ * - duas auditorias de rede fictícias (casa e rede pública), para o painel da demo;
  * - um token de pareamento para testar o agente local.
  * Regra do regulamento (item 6.9): nada aqui pode ser dado real de terceiros.
  */
-import type { AssetType } from "../src/generated/prisma/client.js";
+import type { AssetType, Prisma } from "../src/generated/prisma/client.js";
 import { loadEnv } from "../src/config/env.js";
 import { createDb } from "../src/shared/db.js";
 import {
@@ -20,6 +21,10 @@ import { runBreachCheck } from "../src/modules/breaches/job.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
+
+const NOW = Date.now();
+const HOUR = 60 * 60 * 1000;
+const hoursAgo = (hours: number) => new Date(NOW - hours * HOUR);
 
 const PERSONA = {
   email: "demo@example.com",
@@ -42,6 +47,7 @@ const BREACHES = [
       "Base de clientes de uma operadora fictícia publicada em fórum. Incidente sintético para demonstração.",
     recordTypes: ["CPF", "PHONE"] as AssetType[],
     persona: ["CPF", "PHONE"] as AssetType[],
+    detectedAt: new Date("2025-09-03T13:00:00Z"),
   },
   {
     slug: "lojafacil-2026",
@@ -53,6 +59,7 @@ const BREACHES = [
       "Credenciais de clientes de um marketplace fictício vendidas em canal clandestino. Incidente sintético.",
     recordTypes: ["EMAIL"] as AssetType[],
     persona: ["EMAIL"] as AssetType[],
+    detectedAt: new Date("2026-04-12T09:30:00Z"),
   },
   {
     slug: "clinica-vida-2026",
@@ -64,6 +71,158 @@ const BREACHES = [
       "Cadastro de pacientes de uma rede de clínicas fictícia exposto por servidor mal configurado. Incidente sintético.",
     recordTypes: ["CPF", "EMAIL"] as AssetType[],
     persona: ["CPF", "EMAIL"] as AssetType[],
+    // Detectado há 2 dias: aparece como "novo" no painel.
+    detectedAt: hoursAgo(48),
+  },
+];
+
+const REC_SMB =
+  "Em rede pública, marque a conexão como 'Rede pública' no Windows (Configurações > Rede e " +
+  "Internet > propriedades da rede) e desative 'Compartilhamento de arquivos e impressoras'. Se " +
+  "nunca compartilha pastas, desative o serviço 'Servidor' (LanmanServer).";
+
+/**
+ * Auditorias de rede fictícias da persona, no mesmo formato que o agente local envia.
+ * Os MACs começam com 02: (endereço administrado localmente), então não apontam para nenhum fabricante real.
+ */
+const DEMO_SCANS: Array<Omit<Prisma.NetworkScanCreateInput, "user">> = [
+  {
+    mode: "HOME",
+    agentVersion: "0.1.0",
+    hostOs: "windows",
+    startedAt: hoursAgo(26),
+    finishedAt: new Date(hoursAgo(26).getTime() + 47_000),
+    network: {
+      localIp: "192.168.0.12",
+      cidr: "192.168.0.0/24",
+      gateway: "192.168.0.1",
+      isPrivate: true,
+      wifiSecurity: "WPA2-Personal",
+    },
+    devices: [
+      { ip: "192.168.0.1", mac: "02:00:5e:10:00:01", vendor: null, hostname: "roteador.lan", model: "Roteador Wi-Fi", openPorts: [23, 53, 80, 1900], services: [] },
+      { ip: "192.168.0.23", mac: "02:00:5e:10:00:23", vendor: null, hostname: null, model: "Câmera IP", openPorts: [80], services: [] },
+      { ip: "192.168.0.31", mac: "02:00:5e:10:00:31", vendor: null, hostname: "smart-tv-sala", model: "Smart TV", openPorts: [8008], services: [] },
+      { ip: "192.168.0.40", mac: "02:00:5e:10:00:40", vendor: null, hostname: "impressora", model: "Impressora multifuncional", openPorts: [631, 9100], services: [] },
+      { ip: "192.168.0.57", mac: "02:00:5e:10:00:57", vendor: null, hostname: null, model: null, openPorts: [], services: [] },
+    ],
+    findings: {
+      create: [
+        {
+          severity: "HIGH",
+          kind: "telnet_open",
+          title: "Telnet aberto (acesso sem criptografia)",
+          detail:
+            "O roteador 192.168.0.1 aceita conexões Telnet na porta 23. Senhas e comandos trafegam sem criptografia, e o Telnet é o alvo preferido de botnets como a Mirai.",
+          recommendation:
+            "Desative o Telnet no painel do aparelho (ou peça ao fabricante/provedor). Use SSH se precisar de acesso remoto e troque a senha padrão.",
+          deviceIp: "192.168.0.1",
+          port: 23,
+        },
+        {
+          severity: "MEDIUM",
+          kind: "camera_admin_http",
+          title: "Painel web de câmera sem HTTPS",
+          detail:
+            "O dispositivo 192.168.0.23 exibe um painel web via HTTP na porta 80. Senhas digitadas nele trafegam sem criptografia.",
+          recommendation:
+            "Troque a senha padrão, atualize o firmware e não redirecione essa porta para a Internet. Prefira o acesso pelo app oficial do fabricante.",
+          deviceIp: "192.168.0.23",
+          port: 80,
+        },
+        {
+          severity: "LOW",
+          kind: "router_admin_http",
+          title: "Painel do roteador acessível sem HTTPS",
+          detail:
+            "O roteador 192.168.0.1 exibe o painel de administração via HTTP na porta 80. A senha do painel trafega sem criptografia na rede local.",
+          recommendation:
+            "Troque a senha padrão do painel por uma forte, desative o 'gerenciamento remoto' e use HTTPS se o roteador oferecer.",
+          deviceIp: "192.168.0.1",
+          port: 80,
+        },
+        {
+          severity: "LOW",
+          kind: "upnp_enabled",
+          title: "UPnP ativo no roteador",
+          detail:
+            "O roteador 192.168.0.1 responde à descoberta UPnP e anuncia o serviço de gateway (IGD). Com isso, programas e aparelhos da rede podem abrir portas para a Internet automaticamente, sem você saber.",
+          recommendation:
+            "Se não usa consoles/jogos online que dependem disso, desative o UPnP no painel do roteador (geralmente em 'Avançado' > 'UPnP').",
+          deviceIp: "192.168.0.1",
+          port: null,
+        },
+        {
+          severity: "LOW",
+          kind: "printer_raw_port",
+          title: "Impressora aceita trabalhos sem autenticação",
+          detail:
+            "O dispositivo 192.168.0.40 tem a porta 9100 (impressão direta) aberta: qualquer aparelho da rede pode enviar trabalhos de impressão.",
+          recommendation: "Desative a impressão direta (RAW/JetDirect) se não usa e atualize o firmware.",
+          deviceIp: "192.168.0.40",
+          port: 9100,
+        },
+        {
+          severity: "INFO",
+          kind: "http_service",
+          title: "Serviço web sem HTTPS",
+          detail: "O dispositivo 192.168.0.31 responde a HTTP na porta 8008.",
+          recommendation:
+            "Se for um painel de configuração, troque a senha padrão e mantenha o aparelho atualizado.",
+          deviceIp: "192.168.0.31",
+          port: 8008,
+        },
+      ],
+    },
+  },
+  {
+    mode: "PUBLIC",
+    agentVersion: "0.1.0",
+    hostOs: "windows",
+    startedAt: hoursAgo(74),
+    finishedAt: new Date(hoursAgo(74).getTime() + 6_000),
+    network: {
+      localIp: "10.42.0.37",
+      cidr: null,
+      gateway: "10.42.0.1",
+      isPrivate: true,
+      wifiSecurity: "WPA2-Personal",
+    },
+    devices: [],
+    findings: {
+      create: [
+        {
+          severity: "MEDIUM",
+          kind: "exposed_smb",
+          title: "Compartilhamento de arquivos SMB pode estar exposto (porta 445)",
+          detail:
+            "A porta 445/TCP deste computador aceita conexões em todas as interfaces de rede. Programa: System. O firewall está ativo: o acesso só acontece se existir uma regra liberando esta porta, por isso vale conferir.",
+          recommendation: REC_SMB,
+          deviceIp: null,
+          port: 445,
+        },
+        {
+          severity: "LOW",
+          kind: "hostname_reveals_identity",
+          title: "Nome do computador pode revelar sua identidade",
+          detail:
+            "O nome 'NOTEBOOK-ANA' é anunciado para a rede (DHCP, compartilhamento, AirDrop/Bonjour) e parece conter um nome pessoal. Em redes públicas, isso ajuda estranhos a saber de quem é o aparelho.",
+          recommendation:
+            "Use um nome neutro, sem seu nome (ex.: 'notebook-01'). Windows: Configurações > Sistema > Sobre > Renomear este PC. macOS: Ajustes > Geral > Sobre > Nome.",
+          deviceIp: null,
+          port: null,
+        },
+        {
+          severity: "INFO",
+          kind: "firewall_enabled",
+          title: "Firewall ativo",
+          detail: "O firewall do sistema está ativo e bloqueia conexões de entrada não autorizadas.",
+          recommendation: "Mantenha-o ativo e evite criar exceções para programas que você não reconhece.",
+          deviceIp: null,
+          port: null,
+        },
+      ],
+    },
   },
 ];
 
@@ -124,7 +283,7 @@ async function main() {
   }
 
   for (const [breachIndex, spec] of BREACHES.entries()) {
-    const { recordTypes, persona, ...data } = spec;
+    const { recordTypes, persona, detectedAt: _detectedAt, ...data } = spec;
     const breach = await db.breach.upsert({
       where: { slug: spec.slug },
       update: data,
@@ -163,10 +322,25 @@ async function main() {
 
   const check = await runBreachCheck(db);
 
+  // Datas de detecção realistas para a demo (o job grava "agora").
+  for (const spec of BREACHES) {
+    await db.exposure.updateMany({
+      where: { breach: { slug: spec.slug }, asset: { userId: user.id } },
+      data: { detectedAt: spec.detectedAt },
+    });
+  }
+
+  // Auditorias fictícias da persona. Apaga as anteriores, inclusive testes manuais do agente.
+  await db.networkScan.deleteMany({ where: { userId: user.id } });
+  for (const scan of DEMO_SCANS) {
+    await db.networkScan.create({ data: { ...scan, user: { connect: { id: user.id } } } });
+  }
+
   console.log("Seed concluído (dados sintéticos).");
   console.log(`  Persona: ${PERSONA.email}`);
   console.log(`  Vazamentos sintéticos: ${BREACHES.length}`);
   console.log(`  Exposições novas da persona: ${check.newExposures.length}`);
+  console.log(`  Auditorias de rede fictícias: ${DEMO_SCANS.length}`);
   console.log("  Token de pareamento do agente (válido por 30 dias, mostrado só agora):");
   console.log(`  ${token}`);
 }

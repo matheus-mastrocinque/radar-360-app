@@ -6,7 +6,9 @@ import { ZodError } from "zod";
 import { webOrigins, type Env } from "./config/env.js";
 import { HttpError } from "./shared/auth.js";
 import type { Db } from "./shared/db.js";
+import { authRoutes } from "./modules/auth/routes.js";
 import { breachJobRoutes } from "./modules/breaches/routes.js";
+import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { healthRoutes } from "./modules/health/routes.js";
 import { networkRoutes } from "./modules/network/routes.js";
 
@@ -40,6 +42,8 @@ export async function buildApp({ db, env, logger = true }: AppDeps) {
 
   await app.register(healthRoutes, { db });
   await app.register(networkRoutes, { db });
+  await app.register(authRoutes, { db });
+  await app.register(dashboardRoutes, { db });
   await app.register(breachJobRoutes, { db, jobsSecret: env.JOBS_SECRET });
 
   return app;

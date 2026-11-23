@@ -93,6 +93,11 @@ export function generatePairingToken(): string {
   return `rdr_${randomBytes(32).toString("base64url")}`;
 }
 
+/** Token de sessão do site: 256 bits aleatórios, guardado no banco só como SHA-256. */
+export function generateSessionToken(): string {
+  return `r360s_${randomBytes(32).toString("base64url")}`;
+}
+
 /** Tokens aleatórios de alta entropia podem ser guardados com SHA-256 simples. */
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
