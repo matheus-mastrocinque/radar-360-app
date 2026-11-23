@@ -1,0 +1,153 @@
+// Modelo de dados do Radar360.
+// Regra: identificadores (e-mail monitorado, CPF, telefone) são guardados só como HMAC-SHA256
+// (chave HMAC_SECRET fora do banco) e numa versão mascarada para exibição. Nunca em texto claro.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AssetType {
+  EMAIL
+  CPF
+  PHONE
+}
+
+enum ScanMode {
+  HOME
+  PUBLIC
+}
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  isDemo    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  assets        Asset[]
+  pairingTokens PairingToken[]
+  networkScans  NetworkScan[]
+}
+
+/// Identificador que o usuário monitora. Só entra no monitoramento depois de verificado.
+model Asset {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       AssetType
+  hmac       String
+  masked     String
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  exposures Exposure[]
+
+  /// Um identificador pertence a uma única conta (evita consultar dados de outra pessoa).
+  @@unique([type, hmac])
+  @@index([userId])
+}
+
+/// Incidente de vazamento. Na demo, sempre sintético; incidentes reais só como metadados.
+model Breach {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  company     String
+  occurredAt  DateTime
+  disclosedAt DateTime?
+  /// Categorias expostas, ex.: "cpf", "telefone", "endereco", "senha_hash".
+  dataClasses String[]
+  description String
+  sourceUrl   String?
+  isSynthetic Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  records   BreachRecord[]
+  exposures Exposure[]
+}
+
+/// Identificador presente num vazamento, guardado apenas como HMAC.
+model BreachRecord {
+  id        String    @id @default(cuid())
+  breachId  String
+  breach    Breach    @relation(fields: [breachId], references: [id], onDelete: Cascade)
+  assetType AssetType
+  hmac      String
+
+  @@unique([breachId, assetType, hmac])
+  @@index([assetType, hmac])
+}
+
+/// Ocorrência de um ativo do usuário num vazamento. O unique garante a deduplicação dos alertas.
+model Exposure {
+  id         String    @id @default(cuid())
+  assetId    String
+  asset      Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  breachId   String
+  breach     Breach    @relation(fields: [breachId], references: [id], onDelete: Cascade)
+  detectedAt DateTime  @default(now())
+  notifiedAt DateTime?
+
+  @@unique([assetId, breachId])
+}
+
+/// Token que liga o agente local à conta do usuário. Guardado só como SHA-256 (token aleatório de 256 bits).
+model PairingToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  label      String?
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model NetworkScan {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode         ScanMode
+  agentVersion String
+  hostOs       String
+  startedAt    DateTime
+  finishedAt   DateTime
+  /// localIp, cidr, gateway, isPrivate, wifiSecurity
+  network      Json
+  /// Dispositivos encontrados (só no modo casa)
+  devices      Json
+  createdAt    DateTime @default(now())
+
+  findings NetworkFinding[]
+
+  @@index([userId, createdAt])
+}
+
+model NetworkFinding {
+  id             String      @id @default(cuid())
+  scanId         String
+  scan           NetworkScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  severity       Severity
+  kind           String
+  title          String
+  detail         String
+  recommendation String
+  deviceIp       String?
+  port           Int?
+
+  @@index([scanId])
+}

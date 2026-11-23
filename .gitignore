@@ -1,0 +1,34 @@
+# Dependências e builds
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Cliente Prisma gerado
+apps/api/src/generated/
+
+# Segredos: nunca versionar .env (use os .env.example)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Resultados de scan salvos localmente pelo agente
+packages/local-agent/*.json
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+
+# Notas internas da dupla (não publicar)
+briefing-hackbrasil.md

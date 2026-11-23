@@ -1,0 +1,27 @@
+{
+  "name": "radar-360",
+  "private": true,
+  "description": "Plataforma de cibersegurança pessoal: monitoramento de vazamentos, resposta a incidentes com LGPD e auditoria de rede local. Hack Brasil 2026, Trilha 06.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @radar/api\" \"npm run dev -w @radar/web\"",
+    "build": "npm run build -w @radar/api && npm run build -w @radar/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run agent:test",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run db:migrate -w @radar/api",
+    "db:seed": "npm run db:seed -w @radar/api",
+    "agent:test": "cd packages/local-agent && python -I -m unittest discover -s tests"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}
