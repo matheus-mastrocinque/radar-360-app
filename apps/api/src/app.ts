@@ -10,15 +10,19 @@ import { authRoutes } from "./modules/auth/routes.js";
 import { breachJobRoutes } from "./modules/breaches/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { healthRoutes } from "./modules/health/routes.js";
+import type { ReportClassifier } from "./modules/incidents/classify.js";
+import { incidentRoutes } from "./modules/incidents/routes.js";
 import { networkRoutes } from "./modules/network/routes.js";
 
 export interface AppDeps {
   db: Db;
   env: Pick<Env, "WEB_ORIGIN" | "JOBS_SECRET">;
   logger?: FastifyServerOptions["logger"];
+  /** Classificador de relatos com LLM; sem ele, o copiloto usa só as regras por palavras-chave. */
+  classifier?: ReportClassifier | null;
 }
 
-export async function buildApp({ db, env, logger = true }: AppDeps) {
+export async function buildApp({ db, env, logger = true, classifier = null }: AppDeps) {
   const app = Fastify({ logger, trustProxy: true });
 
   await app.register(helmet);
@@ -44,6 +48,7 @@ export async function buildApp({ db, env, logger = true }: AppDeps) {
   await app.register(networkRoutes, { db });
   await app.register(authRoutes, { db });
   await app.register(dashboardRoutes, { db });
+  await app.register(incidentRoutes, { db, classifier });
   await app.register(breachJobRoutes, { db, jobsSecret: env.JOBS_SECRET });
 
   return app;

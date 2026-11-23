@@ -22,6 +22,8 @@ const envSchema = z.object({
   RUN_CRON: booleanFromString,
   BREACH_CHECK_CRON: z.string().default("0 */6 * * *"),
   GEMINI_API_KEY: z.string().optional(),
+  /** Modelo estável do Gemini para classificar relatos (conferido em 23/11/2026). */
+  GEMINI_MODEL: z.string().default("gemini-3.5-flash-lite"),
   RESEND_API_KEY: z.string().optional(),
 });
 

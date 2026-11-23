@@ -48,6 +48,8 @@ const BREACHES = [
     recordTypes: ["CPF", "PHONE"] as AssetType[],
     persona: ["CPF", "PHONE"] as AssetType[],
     detectedAt: new Date("2025-09-03T13:00:00Z"),
+    // .invalid é reservado: o contato do encarregado nunca chega a ninguém de verdade.
+    dpoContact: "encarregado@teleconecta.invalid",
   },
   {
     slug: "lojafacil-2026",
@@ -60,6 +62,7 @@ const BREACHES = [
     recordTypes: ["EMAIL"] as AssetType[],
     persona: ["EMAIL"] as AssetType[],
     detectedAt: new Date("2026-04-12T09:30:00Z"),
+    dpoContact: "privacidade@lojafacil.invalid",
   },
   {
     slug: "clinica-vida-2026",
@@ -73,6 +76,7 @@ const BREACHES = [
     persona: ["CPF", "EMAIL"] as AssetType[],
     // Detectado há 2 dias: aparece como "novo" no painel.
     detectedAt: hoursAgo(48),
+    dpoContact: "dpo@clinicavida.invalid",
   },
 ];
 

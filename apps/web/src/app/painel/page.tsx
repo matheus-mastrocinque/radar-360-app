@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { FlaskConical, LogOut, Radar } from "lucide-react";
+import { FlaskConical, LifeBuoy, LogOut, Radar } from "lucide-react";
 import { logout } from "@/app/actions";
 import { AssetsCard } from "@/components/dashboard/assets";
 import { BreachesSection } from "@/components/dashboard/breaches";
@@ -54,6 +54,10 @@ export default async function PainelPage() {
             Radar360
           </Link>
           <div className="flex items-center gap-3">
+            <Link href="/painel/copiloto" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              <LifeBuoy aria-hidden />
+              Copiloto
+            </Link>
             <span className="hidden text-sm text-muted-foreground sm:inline">{dashboard.user.name}</span>
             <form action={logout}>
               <SubmitButton variant="outline" size="sm" pendingText="Saindo...">

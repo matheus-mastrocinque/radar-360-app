@@ -2,10 +2,18 @@ import { buildApp } from "./app.js";
 import { loadEnv } from "./config/env.js";
 import { createDb } from "./shared/db.js";
 import { startBreachCron } from "./modules/breaches/scheduler.js";
+import { createGeminiClassifier } from "./modules/incidents/classify.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
-const app = await buildApp({ db, env });
+const classifier = env.GEMINI_API_KEY
+  ? createGeminiClassifier({ apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL })
+  : null;
+const app = await buildApp({ db, env, classifier });
+app.log.info(
+  { classifier: classifier ? env.GEMINI_MODEL : "rules" },
+  classifier ? "incident copilot uses Gemini" : "incident copilot uses keyword rules (no GEMINI_API_KEY)",
+);
 
 if (env.RUN_CRON) {
   startBreachCron(db, env.BREACH_CHECK_CRON, app.log);

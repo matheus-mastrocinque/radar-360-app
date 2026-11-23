@@ -1,5 +1,6 @@
 import { CalendarClock, EyeOff, FileText, IdCard, Mail, Phone } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { openBreachPlan } from "@/app/painel/copiloto/actions";
+import { SubmitButton } from "@/components/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AssetType, BreachItem } from "@/lib/dashboard";
 import { formatCalendarDate, formatDate, formatMonth } from "@/lib/format";
@@ -76,10 +77,12 @@ function BreachCard({ breach }: { breach: BreachItem }) {
             ? `divulgado pela empresa em ${formatCalendarDate(breach.disclosedAt)}`
             : "ainda não divulgado pela empresa"}
         </span>
-        <Button variant="outline" size="sm" disabled title="Plano de resposta e notificação LGPD: em breve">
-          <FileText aria-hidden />
-          Gerar plano de resposta (em breve)
-        </Button>
+        <form action={openBreachPlan.bind(null, breach.id)}>
+          <SubmitButton variant="outline" size="sm" pendingText="Abrindo o plano...">
+            <FileText aria-hidden />
+            Plano de resposta
+          </SubmitButton>
+        </form>
       </footer>
     </article>
   );

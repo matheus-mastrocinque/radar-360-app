@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowRight, Database, ListChecks, ShieldCheck, Wifi } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Dashboard, DataClass, Finding, ScanSummary } from "@/lib/dashboard";
@@ -169,10 +170,13 @@ export function FirstSteps({ dashboard }: { dashboard: Dashboard }) {
             ))}
           </ol>
         )}
-        <p className="mt-4 flex items-center gap-1.5 border-t pt-3 text-xs text-muted-foreground">
+        <Link
+          href="/painel/copiloto"
+          className="mt-4 flex items-center gap-1.5 border-t pt-3 text-xs font-medium text-foreground/80 hover:text-foreground"
+        >
           <ArrowRight className="size-3.5" aria-hidden />
-          Plano completo para 15 min, 1 h e 24 h, com a notificação LGPD pronta: em breve, no copiloto.
-        </p>
+          Plano completo para 15 min, 1 h e 24 h, com a notificação LGPD pronta: abra o copiloto
+        </Link>
       </CardContent>
     </Card>
   );

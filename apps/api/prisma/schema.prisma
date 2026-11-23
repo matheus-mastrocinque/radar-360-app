@@ -32,6 +32,31 @@ enum Severity {
   CRITICAL
 }
 
+/// Tipos de incidente do copiloto. Lista fechada: o LLM só escolhe entre eles.
+enum IncidentType {
+  DATA_BREACH
+  PIX_SCAM
+  PHISHING
+  ACCOUNT_TAKEOVER
+  STOLEN_PHONE
+  IDENTITY_FRAUD
+}
+
+enum IncidentSource {
+  /// Vazamento detectado pelo monitoramento.
+  DETECTED
+  /// Relato do usuário ("caí num golpe do Pix").
+  REPORTED
+}
+
+/// Quem definiu o tipo do incidente.
+enum ClassifiedBy {
+  SYSTEM
+  USER
+  AI
+  RULES
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -43,6 +68,7 @@ model User {
   pairingTokens PairingToken[]
   networkScans  NetworkScan[]
   sessions      Session[]
+  incidents     Incident[]
 }
 
 /// Identificador que o usuário monitora. Só entra no monitoramento depois de verificado.
@@ -74,11 +100,14 @@ model Breach {
   dataClasses String[]
   description String
   sourceUrl   String?
+  /// Contato público do encarregado (DPO) da empresa (LGPD, art. 41, § 1º).
+  dpoContact  String?
   isSynthetic Boolean   @default(true)
   createdAt   DateTime  @default(now())
 
   records   BreachRecord[]
   exposures Exposure[]
+  incidents Incident[]
 }
 
 /// Identificador presente num vazamento, guardado apenas como HMAC.
@@ -127,6 +156,8 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  incidents Incident[]
+
   @@index([userId])
   @@index([expiresAt])
 }
@@ -164,4 +195,35 @@ model NetworkFinding {
   port           Int?
 
   @@index([scanId])
+}
+
+/// Incidente acompanhado pelo copiloto. O plano não é gravado: sai dos playbooks curados a cada leitura.
+model Incident {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Só na demo: cada sessão vê os próprios incidentes, que somem junto com ela.
+  sessionId      String?
+  session        Session?       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type           IncidentType
+  source         IncidentSource
+  classifiedBy   ClassifiedBy
+  breachId       String?
+  breach         Breach?        @relation(fields: [breachId], references: [id], onDelete: SetNull)
+  /// Relato do usuário já sem CPF, cartão, telefone e e-mail.
+  narrative      String?
+  /// Resumo em uma frase (IA ou texto fixo), também sem dados pessoais.
+  summary        String?
+  /// Sinais do relato que ativam passos extras do playbook (ex.: MONEY_SENT).
+  flags          String[]       @default([])
+  /// Ids dos passos do plano já concluídos.
+  completedSteps String[]       @default([])
+  /// Notificação LGPD ao encarregado: enviada em / respondida em.
+  lgpdSentAt     DateTime?
+  lgpdAnsweredAt DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
 }
