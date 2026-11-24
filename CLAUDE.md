@@ -7,6 +7,8 @@ Plataforma de cibersegurança pessoal para o **Hack Brasil 2026, Trilha 06 (Cibe
 - Features novas param em **28/11**.
 - Depois de 30/11, ninguém faz commit: o repositório dos finalistas fica congelado até a final (12/12), e um commit nesse período pode desclassificar.
 
+**Estado atual:** o que está pronto, o que falta para a submissão e as decisões de implementação estão em [`docs/STATUS.md`](docs/STATUS.md). Leia antes de começar uma tarefa e atualize quando terminar.
+
 ## 1. O produto (escopo do MVP)
 
 **Núcleo**, fazer bem feito:

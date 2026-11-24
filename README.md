@@ -42,6 +42,7 @@ cp apps/api/.env.example apps/api/.env       # preencha HMAC_SECRET e JOBS_SECRE
 cp apps/web/.env.example apps/web/.env.local
 npm run db:up         # Postgres local
 npm run db:migrate    # cria as tabelas
+npm run db:generate -w @radar/api   # gera o cliente do Prisma (não vai para o git)
 npm run db:seed       # persona demo, vazamentos sintéticos e token do agente
 npm run dev           # API em http://localhost:3333 e web em http://localhost:3000
 ```
