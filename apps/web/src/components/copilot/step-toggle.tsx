@@ -31,8 +31,10 @@ function ToggleButton({ done, title }: { done: boolean; title: string }) {
       aria-checked={done}
       aria-label={done ? `Desmarcar: ${title}` : `Marcar como feito: ${title}`}
       className={cn(
-        "mt-0.5 flex size-5 items-center justify-center rounded-md ring-1 transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        done ? "bg-emerald-600 text-white ring-emerald-600" : "bg-background ring-border hover:ring-foreground/40",
+        "mt-px flex size-5 cursor-pointer items-center justify-center rounded-md ring-1 transition-all outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        done
+          ? "bg-emerald-600 text-white shadow-[0_1px_6px_-1px_oklch(0.6_0.15_160/0.6)] ring-emerald-600"
+          : "bg-background shadow-xs ring-input hover:ring-foreground/40",
         pending && "opacity-60",
       )}
     >

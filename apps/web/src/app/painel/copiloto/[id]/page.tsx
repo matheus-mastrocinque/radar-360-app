@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Bot, CalendarClock, EyeOff, Radar, ScanSearch, UserRound } from "lucide-react";
+import { Bot, CalendarClock, ChevronRight, EyeOff, Info, ScanSearch, UserRound } from "lucide-react";
 import { LgpdPanel } from "@/components/copilot/lgpd-panel";
 import { ResponsePlan } from "@/components/copilot/plan";
 import { dataClassTone } from "@/components/dashboard/styles";
-import { buttonVariants } from "@/components/ui/button";
+import { ErrorState } from "@/components/shell/error-state";
 import { fetchIncident, type IncidentView } from "@/lib/incidents";
 import { formatCalendarDate, formatDate, formatMonth } from "@/lib/format";
 import { getSessionToken } from "@/lib/session";
@@ -25,22 +25,24 @@ const CLASSIFIED_BY: Record<IncidentView["classifiedBy"], { label: string; icon:
 function BreachFacts({ breach }: { breach: NonNullable<IncidentView["breach"]> }) {
   const sorted = [...breach.dataClasses].sort((a, b) => b.weight - a.weight);
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span>Ocorreu em {formatMonth(breach.occurredAt)}</span>
-        <span>
-          {breach.disclosedAt
-            ? `Divulgado pela empresa em ${formatCalendarDate(breach.disclosedAt)}`
-            : "Ainda não divulgado pela empresa"}
-        </span>
-        {breach.isSynthetic && (
-          <span className="rounded-full px-2 py-px ring-1 ring-border">Incidente sintético</span>
-        )}
+    <div className="grid gap-px overflow-hidden rounded-xl bg-border shadow-xs ring-1 ring-border sm:grid-cols-[auto_auto_minmax(0,1fr)]">
+      <div className="flex flex-col gap-1 bg-card px-4 py-3">
+        <span className="text-xs text-muted-foreground">Ocorreu em</span>
+        <span className="text-sm font-medium">{formatMonth(breach.occurredAt)}</span>
       </div>
-      <div className="flex flex-col gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <div className="flex flex-col gap-1 bg-card px-4 py-3">
+        <span className="text-xs text-muted-foreground">Divulgação pela empresa</span>
+        <span className="text-sm font-medium">
+          {breach.disclosedAt ? formatCalendarDate(breach.disclosedAt) : "Ainda não divulgado pela empresa"}
+        </span>
+      </div>
+      <div className="flex flex-col gap-2 bg-card px-4 py-3">
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
           <EyeOff className="size-3.5" aria-hidden />
           Categorias expostas (nunca o dado vazado)
+          {breach.isSynthetic && (
+            <span className="rounded-full px-2 py-px ring-1 ring-border ring-inset">Incidente sintético</span>
+          )}
         </span>
         <ul className="flex flex-wrap gap-1.5">
           {sorted.map((item) => (
@@ -68,16 +70,7 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
   if (!result.ok && result.reason === "not_found") notFound();
 
   if (!result.ok) {
-    return (
-      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
-        <Radar className="size-8 text-muted-foreground" aria-hidden />
-        <h1 className="text-xl font-semibold">Não conseguimos carregar o plano</h1>
-        <p className="text-sm text-muted-foreground">A API não respondeu. Tente de novo em alguns segundos.</p>
-        <Link href={`/painel/copiloto/${id}`} className={buttonVariants({ variant: "outline" })}>
-          Tentar de novo
-        </Link>
-      </div>
-    );
+    return <ErrorState title="Não conseguimos carregar o plano" retryHref={`/painel/copiloto/${id}`} />;
   }
 
   const incident = result.data;
@@ -85,19 +78,21 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
   const OriginIcon = origin.icon;
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-        <Link
-          href="/painel/copiloto"
-          className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden />
-          Copiloto
-        </Link>
+    <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10">
+      <div className="flex flex-col gap-5">
+        <nav aria-label="Trilha" className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Link href="/painel/copiloto" className="rounded-sm hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+            Copiloto
+          </Link>
+          <ChevronRight className="size-3.5" aria-hidden />
+          <span className="truncate text-foreground" aria-current="page">
+            Plano de resposta
+          </span>
+        </nav>
 
         <header className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-foreground px-2.5 py-0.5 text-xs font-medium text-background">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="rounded-full bg-ink px-2.5 py-0.5 text-xs font-medium text-ink-foreground">
               {incident.typeLabel}
             </span>
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -109,15 +104,17 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
               Aberto em {formatDate(incident.createdAt)}
             </span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{incident.title}</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">{incident.summary ?? incident.typeDescription}</p>
+          <h1 className="text-3xl font-semibold tracking-tight">{incident.title}</h1>
+          <p className="max-w-3xl leading-relaxed text-muted-foreground">
+            {incident.summary ?? incident.typeDescription}
+          </p>
 
           {incident.flags.length > 0 && (
             <ul className="flex flex-wrap gap-1.5" aria-label="O que o seu relato indica">
               {incident.flags.map((flag) => (
                 <li
                   key={flag.key}
-                  className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200"
+                  className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 ring-inset"
                 >
                   {flag.label}
                 </li>
@@ -126,11 +123,12 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
           )}
 
           {incident.narrative && (
-            <details className="max-w-3xl text-sm">
-              <summary className="cursor-pointer text-xs font-medium text-foreground/70 select-none hover:text-foreground">
+            <details className="group max-w-3xl text-sm">
+              <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded text-xs font-medium text-foreground/70 select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
                 Seu relato (sem dados pessoais)
               </summary>
-              <p className="mt-2 rounded-lg bg-background p-3 whitespace-pre-wrap text-muted-foreground ring-1 ring-border">
+              <p className="mt-2 rounded-lg bg-card p-3 whitespace-pre-wrap text-muted-foreground ring-1 ring-border">
                 {incident.narrative}
               </p>
             </details>
@@ -138,15 +136,16 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
         </header>
 
         {incident.breach && <BreachFacts breach={incident.breach} />}
+      </div>
 
-        <ResponsePlan incident={incident} />
+      <ResponsePlan incident={incident} />
 
-        {incident.lgpd && <LgpdPanel incident={incident} lgpd={incident.lgpd} />}
-      </main>
+      {incident.lgpd && <LgpdPanel incident={incident} lgpd={incident.lgpd} />}
 
-      <footer className="mx-auto max-w-6xl px-4 pb-10 text-xs text-muted-foreground sm:px-6">
+      <p className="flex items-start gap-2 rounded-lg bg-muted/60 px-4 py-3 text-xs text-muted-foreground">
+        <Info className="mt-px size-3.5 shrink-0" aria-hidden />
         Radar360 · {incident.disclaimer}
-      </footer>
-    </div>
+      </p>
+    </main>
   );
 }

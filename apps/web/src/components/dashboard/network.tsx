@@ -1,4 +1,4 @@
-import { Home, Laptop, Router, Terminal } from "lucide-react";
+import { ChevronRight, Home, Laptop, Router, Terminal } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Finding, ScanSummary, Severity } from "@/lib/dashboard";
 import { formatDateTime, plural } from "@/lib/format";
@@ -26,22 +26,26 @@ function FindingRow({ finding, device }: { finding: Finding; device: string | nu
   const style = SEVERITY_STYLE[finding.severity];
   const where = [device, finding.port !== null ? `porta ${finding.port}` : null].filter(Boolean).join(" · ");
   return (
-    <li className="flex gap-3 py-3 first:pt-0 last:pb-0">
-      <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", style.dot)} aria-hidden />
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-sm font-medium">{finding.title}</span>
-          <span className={cn("rounded-full px-1.5 py-px text-[11px] font-medium", style.badge)}>{style.label}</span>
-        </div>
-        {where && <span className="font-mono text-xs text-muted-foreground">{where}</span>}
-        {finding.severity !== "info" && <p className="text-sm text-muted-foreground">{finding.recommendation}</p>}
-        <details className="group text-xs text-muted-foreground">
-          <summary className="cursor-pointer select-none font-medium text-foreground/70 hover:text-foreground">
-            Por que isso importa
-          </summary>
-          <p className="mt-1">{finding.detail}</p>
-        </details>
+    <li className="relative flex flex-col gap-1.5 py-3.5 pl-4 first:pt-0 last:pb-0">
+      <span
+        className={cn("absolute top-3.5 bottom-3.5 left-0 w-[3px] rounded-full [li:first-child>&]:top-0 [li:last-child>&]:bottom-0", style.rail)}
+        aria-hidden
+      />
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-sm font-medium">{finding.title}</span>
+        <span className={cn("rounded-full px-1.5 py-px text-[11px] font-medium", style.badge)}>{style.label}</span>
       </div>
+      {where && <span className="font-mono text-xs break-words text-muted-foreground">{where}</span>}
+      {finding.severity !== "info" && (
+        <p className="text-sm leading-relaxed text-foreground/80">{finding.recommendation}</p>
+      )}
+      <details className="group text-xs text-muted-foreground">
+        <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded font-medium text-foreground/70 select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+          Por que isso importa
+        </summary>
+        <p className="mt-1.5 pl-[18px] leading-relaxed">{finding.detail}</p>
+      </details>
     </li>
   );
 }
@@ -71,8 +75,10 @@ function ScanCard({
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon className="size-4 text-muted-foreground" aria-hidden />
+        <CardTitle className="flex items-center gap-2.5">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-signal">
+            <Icon className="size-4" aria-hidden />
+          </span>
           {title}
         </CardTitle>
         <CardDescription>{scopeNote}</CardDescription>
@@ -81,15 +87,15 @@ function ScanCard({
         {!scan ? (
           <div className="flex flex-col gap-2 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             <p>{emptyText}</p>
-            <code className="flex items-center gap-2 rounded bg-muted px-2 py-1 font-mono text-xs text-foreground">
-              <Terminal className="size-3.5" aria-hidden />
+            <code className="flex items-center gap-2 overflow-x-auto rounded-md bg-ink px-3 py-2 font-mono text-xs text-ink-foreground">
+              <Terminal className="size-3.5 shrink-0 text-signal" aria-hidden />
               python scanner.py --mode {agentMode}
             </code>
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>
+            <div className="flex flex-col gap-2.5 rounded-lg bg-muted/50 px-3 py-2.5">
+              <span className="text-xs text-muted-foreground">
                 Última auditoria em {formatDateTime(scan.finishedAt)}
                 {scan.scope === "home" && ` · ${plural(scan.devices.length, "aparelho")}`}
                 {scan.network.wifiSecurity && ` · Wi-Fi ${scan.network.wifiSecurity}`}
@@ -98,16 +104,16 @@ function ScanCard({
             </div>
 
             {scan.scope === "home" && scan.devices.length > 0 && (
-              <ul className="flex flex-wrap gap-1.5">
+              <ul className="flex flex-wrap gap-1.5" aria-label="Aparelhos encontrados">
                 {scan.devices.map((device) => (
                   <li
                     key={device.ip}
-                    className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs"
+                    className="flex max-w-full items-center gap-1.5 rounded-md bg-card px-2 py-1 text-xs ring-1 ring-border ring-inset"
                   >
                     {device.ip === scan.network.gateway && (
-                      <Router className="size-3.5 text-muted-foreground" aria-hidden />
+                      <Router className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                     )}
-                    <span>{device.model ?? device.hostname ?? "Aparelho sem nome"}</span>
+                    <span className="truncate">{device.model ?? device.hostname ?? "Aparelho sem nome"}</span>
                     <span className="font-mono text-muted-foreground">{device.ip}</span>
                   </li>
                 ))}
@@ -128,12 +134,13 @@ function ScanCard({
 
 export function NetworkSection({ network }: { network: { home: ScanSummary | null; public: ScanSummary | null } }) {
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="rede">
-      <div className="flex flex-col gap-1">
-        <h2 id="rede" className="text-lg font-semibold tracking-tight">
+    <section className="flex flex-col gap-4 pt-2" aria-labelledby="rede">
+      <div className="flex flex-col gap-1.5">
+        <span className="eyebrow text-brand">Agente local</span>
+        <h2 id="rede" className="text-xl font-semibold tracking-tight">
           Sua rede
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-3xl text-sm text-muted-foreground">
           Resultados do agente local. Ele só varre a sua própria rede, com o seu consentimento, e nunca tenta senhas
           nem invade aparelhos.
         </p>

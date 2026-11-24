@@ -1,4 +1,16 @@
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Hourglass, Mail, Scale, Send } from "lucide-react";
+import {
+  AlertTriangle,
+  AlignLeft,
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Hourglass,
+  Landmark,
+  Mail,
+  Scale,
+  Send,
+} from "lucide-react";
 import { recordLgpd } from "@/app/painel/copiloto/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -22,20 +34,41 @@ const STAGE_INDEX: Record<LgpdStatus, number> = { not_sent: 0, waiting: 1, overd
 function Stages({ status }: { status: LgpdStatus }) {
   const current = STAGE_INDEX[status];
   return (
-    <ol className="grid grid-cols-3 gap-2" aria-label="Etapas da notificação LGPD">
+    <ol className="grid grid-cols-3" aria-label="Etapas da notificação LGPD">
       {STAGES.map((stage, index) => {
         const done = index < current;
         const active = index === current || (status === "overdue" && index === 2);
+        const alert = active && status === "overdue";
         return (
-          <li key={stage.key} className="flex flex-col gap-1.5">
-            <div
-              className={cn(
-                "h-1.5 rounded-full",
-                done ? "bg-emerald-600" : active ? (status === "overdue" ? "bg-red-600" : "bg-foreground") : "bg-muted",
+          <li key={stage.key} className="flex flex-col gap-2" aria-current={active ? "step" : undefined}>
+            <div className="flex items-center">
+              <span
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-semibold ring-1",
+                  done && "bg-emerald-600 text-white ring-emerald-600",
+                  !done && alert && "bg-red-600 text-white ring-red-600 shadow-[0_0_0_4px_oklch(0.64_0.2_25/0.15)]",
+                  !done && active && !alert && "bg-ink text-signal ring-ink",
+                  !done && !active && "bg-background text-muted-foreground ring-border",
+                )}
+              >
+                {done ? <Check className="size-3.5" strokeWidth={3} aria-hidden /> : alert ? "!" : index + 1}
+              </span>
+              {index < STAGES.length - 1 && (
+                <span
+                  className={cn("mx-2 h-0.5 flex-1 rounded-full", done ? "bg-emerald-600" : "bg-border")}
+                  aria-hidden
+                />
               )}
-            />
-            <span className={cn("text-xs", done || active ? "font-medium text-foreground" : "text-muted-foreground")}>
-              {index + 1}. {stage.label}
+            </div>
+            <span
+              className={cn(
+                "pr-2 text-xs leading-snug",
+                done || active ? "font-medium text-foreground" : "text-muted-foreground",
+                alert && "text-red-700",
+              )}
+            >
+              {stage.label}
+              {done && <span className="sr-only"> (concluída)</span>}
             </span>
           </li>
         );
@@ -51,7 +84,7 @@ function TextBlock({ text, label }: { text: string; label: string }) {
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         <CopyButton text={text} />
       </div>
-      <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/40 p-4 font-sans text-sm leading-relaxed whitespace-pre-wrap">
+      <pre className="max-h-96 overflow-auto rounded-lg bg-background p-4 font-sans text-sm leading-relaxed break-words whitespace-pre-wrap shadow-xs ring-1 ring-border sm:p-5">
         {text}
       </pre>
     </div>
@@ -62,7 +95,7 @@ function StatusBanner({ lgpd }: { lgpd: Lgpd }) {
   const { timeline } = lgpd;
   if (timeline.status === "waiting" && timeline.sentAt && timeline.deadline) {
     return (
-      <div className="flex items-start gap-3 rounded-lg bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
+      <div className="flex items-start gap-3 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
         <Hourglass className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
           Enviada em {formatDate(timeline.sentAt)}. A empresa tem até <strong>{formatDate(timeline.deadline)}</strong>{" "}
@@ -75,8 +108,8 @@ function StatusBanner({ lgpd }: { lgpd: Lgpd }) {
   }
   if (timeline.status === "overdue" && timeline.deadline) {
     return (
-      <div className="flex items-start gap-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-900 ring-1 ring-red-200">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="flex items-start gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-900 ring-1 ring-red-200">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-600" aria-hidden />
         <p>
           O prazo terminou em <strong>{formatDate(timeline.deadline)}</strong> sem resposta. Você já pode levar o caso à
           ANPD: a petição abaixo está pronta.
@@ -86,7 +119,7 @@ function StatusBanner({ lgpd }: { lgpd: Lgpd }) {
   }
   if (timeline.status === "answered" && timeline.answeredAt) {
     return (
-      <div className="flex items-start gap-3 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-900 ring-1 ring-emerald-200">
+      <div className="flex items-start gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 ring-1 ring-emerald-200">
         <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
           A empresa respondeu em {formatDate(timeline.answeredAt)}. Se a resposta veio incompleta, você ainda pode
@@ -106,10 +139,12 @@ export function LgpdPanel({ incident, lgpd }: { incident: IncidentView; lgpd: Lg
   const sent = timeline.status !== "not_sent";
 
   return (
-    <Card id="lgpd" className="scroll-mt-6">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Scale className="size-4 text-muted-foreground" aria-hidden />
+    <Card id="lgpd" className="scroll-mt-20">
+      <CardHeader className="border-b">
+        <CardTitle className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-signal">
+            <Scale className="size-4" aria-hidden />
+          </span>
           Notificação LGPD ao encarregado
         </CardTitle>
         <CardDescription>
@@ -117,19 +152,40 @@ export function LgpdPanel({ incident, lgpd }: { incident: IncidentView; lgpd: Lg
           próximo passo é a ANPD.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-5">
+      <CardContent className="flex flex-col gap-6">
         <Stages status={timeline.status} />
         <StatusBanner lgpd={lgpd} />
 
         {petition && (
-          <div className="flex flex-col gap-4 rounded-xl border border-red-200 p-4">
-            <h3 className="font-semibold">Petição à ANPD</h3>
+          <div className="flex flex-col gap-5 rounded-xl bg-gradient-to-b from-red-50/80 to-red-50/20 p-4 ring-1 ring-red-200 sm:p-5">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white">
+                <Landmark className="size-4" aria-hidden />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col">
+                  <h3 className="font-semibold tracking-tight">Petição à ANPD</h3>
+                  <span className="text-xs text-muted-foreground">Autoridade Nacional de Proteção de Dados</span>
+                </div>
+                <span className="w-fit shrink-0 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                  Pronta para enviar
+                </span>
+              </div>
+            </div>
             <TextBlock text={petition.text} label="Texto da petição" />
-            <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm">
-              {petition.checklist.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ol>
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Como enviar</span>
+              <ol className="flex flex-col gap-2 text-sm">
+                {petition.checklist.map((item, index) => (
+                  <li key={item} className="flex gap-3">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-card font-mono text-[11px] font-semibold ring-1 ring-red-200">
+                      {index + 1}
+                    </span>
+                    <span className="leading-relaxed">{item}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
             <div className="flex flex-wrap gap-2">
               {petition.links.map((link, index) => (
                 <a
@@ -137,7 +193,11 @@ export function LgpdPanel({ incident, lgpd }: { incident: IncidentView; lgpd: Lg
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={buttonVariants({ variant: index === 0 ? "default" : "outline", size: "sm" })}
+                  className={buttonVariants({
+                    variant: index === 0 ? "default" : "outline",
+                    size: "sm",
+                    className: "h-8 px-3",
+                  })}
                 >
                   {link.label}
                   <ArrowUpRight aria-hidden />
@@ -147,26 +207,35 @@ export function LgpdPanel({ incident, lgpd }: { incident: IncidentView; lgpd: Lg
           </div>
         )}
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-muted-foreground">Para</span>
-            <span className="font-medium">
-              Encarregado(a) de dados da {incident.breach?.company}
-              {recipient.contact && <span className="font-mono text-xs font-normal"> · {recipient.contact}</span>}
-            </span>
-            {!sent && <span className="text-xs text-muted-foreground">{recipient.hint}</span>}
-          </div>
-          <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs font-medium text-muted-foreground">Assunto</span>
-            <span>{notice.subject}</span>
-          </div>
+        <div className="flex flex-col gap-4">
+          <dl className="grid overflow-hidden rounded-xl text-sm ring-1 ring-border sm:grid-cols-[7rem_minmax(0,1fr)]">
+            <dt className="flex items-center gap-1.5 bg-muted/60 px-4 pt-3 text-xs font-medium text-muted-foreground sm:py-3">
+              <Mail className="size-3.5" aria-hidden />
+              Para
+            </dt>
+            <dd className="flex flex-col gap-0.5 px-4 pt-1 pb-3 sm:py-3">
+              <span className="font-medium">
+                Encarregado(a) de dados da {incident.breach?.company}
+                {recipient.contact && (
+                  <span className="font-mono text-xs font-normal break-all"> · {recipient.contact}</span>
+                )}
+              </span>
+              {!sent && <span className="text-xs text-muted-foreground">{recipient.hint}</span>}
+            </dd>
+            <dt className="flex items-center gap-1.5 border-t bg-muted/60 px-4 pt-3 text-xs font-medium text-muted-foreground sm:py-3">
+              <AlignLeft className="size-3.5" aria-hidden />
+              Assunto
+            </dt>
+            <dd className="px-4 pt-1 pb-3 sm:border-t sm:py-3">{notice.subject}</dd>
+          </dl>
 
           {sent ? (
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-foreground/80 select-none hover:text-foreground">
+            <details className="group rounded-xl ring-1 ring-border">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-medium text-foreground/80 select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
                 Ver a notificação enviada
+                <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
               </summary>
-              <div className="mt-3">
+              <div className="px-4 pb-4">
                 <TextBlock text={notice.body} label="Texto da notificação" />
               </div>
             </details>
@@ -181,17 +250,17 @@ export function LgpdPanel({ incident, lgpd }: { incident: IncidentView; lgpd: Lg
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+        <div className="flex flex-wrap items-center gap-2 border-t pt-5">
           {timeline.status === "not_sent" && (
             <>
               {mailto && (
-                <a href={mailto} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <a href={mailto} className={buttonVariants({ variant: "outline", size: "sm", className: "h-8 px-3" })}>
                   <Mail aria-hidden />
                   Abrir no e-mail
                 </a>
               )}
               <form action={recordLgpd.bind(null, incident.id, "sent")}>
-                <SubmitButton size="sm" pendingText="Registrando...">
+                <SubmitButton size="sm" pendingText="Registrando..." className="h-8 px-3">
                   <Send aria-hidden />
                   Marquei como enviada
                 </SubmitButton>
@@ -200,29 +269,31 @@ export function LgpdPanel({ incident, lgpd }: { incident: IncidentView; lgpd: Lg
           )}
           {(timeline.status === "waiting" || timeline.status === "overdue") && (
             <form action={recordLgpd.bind(null, incident.id, "answered")}>
-              <SubmitButton size="sm" variant="outline" pendingText="Registrando...">
+              <SubmitButton size="sm" variant="outline" pendingText="Registrando..." className="h-8 px-3">
                 <CheckCircle2 aria-hidden />A empresa respondeu
               </SubmitButton>
             </form>
           )}
           {sent && (
             <form action={recordLgpd.bind(null, incident.id, "reset")}>
-              <SubmitButton size="sm" variant="ghost" pendingText="Desfazendo...">
+              <SubmitButton size="sm" variant="ghost" pendingText="Desfazendo..." className="h-8 px-3">
                 Desfazer o envio
               </SubmitButton>
             </form>
           )}
         </div>
 
-        <div className="flex flex-col gap-2 border-t pt-4">
+        <div className="flex flex-col gap-3 border-t pt-5">
           <span className="text-xs font-medium text-muted-foreground">Base legal (Lei nº 13.709/2018)</span>
           <ul className="grid gap-2 sm:grid-cols-2">
             {[...notice.articles, ...(petition?.articles ?? [])]
               .filter((article, index, all) => all.findIndex((other) => other.ref === article.ref) === index)
               .map((article) => (
-                <li key={article.ref} className="flex flex-col rounded-lg bg-muted/50 px-3 py-2 text-xs">
-                  <span className="font-semibold">{article.ref}</span>
-                  <span className="text-muted-foreground">{article.text}</span>
+                <li key={article.ref} className="flex items-start gap-3 rounded-lg bg-muted/50 px-3 py-2.5 text-xs">
+                  <span className="shrink-0 rounded-md bg-card px-1.5 py-0.5 font-mono text-[11px] font-semibold whitespace-nowrap ring-1 ring-border">
+                    {article.ref}
+                  </span>
+                  <span className="leading-relaxed text-muted-foreground">{article.text}</span>
                 </li>
               ))}
           </ul>

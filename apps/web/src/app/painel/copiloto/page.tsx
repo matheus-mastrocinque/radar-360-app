@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, ChevronRight, FileWarning, LifeBuoy, Radar, ScanSearch } from "lucide-react";
+import { AlertTriangle, ChevronRight, FileWarning, Info, ScanSearch, ScanText, UserRound } from "lucide-react";
 import { openBreachPlan } from "./actions";
 import { ProgressBar } from "@/components/copilot/plan";
+import { PHASE_DOT } from "@/components/copilot/phase-style";
 import { ReportForm } from "@/components/copilot/report-form";
+import { ErrorState } from "@/components/shell/error-state";
 import { SubmitButton } from "@/components/submit-button";
-import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchIncidents, type IncidentListItem, type LgpdStatus } from "@/lib/incidents";
 import { formatDate } from "@/lib/format";
@@ -24,20 +25,31 @@ const LGPD_BADGE: Record<LgpdStatus, { label: string; className: string }> = {
   answered: { label: "LGPD: respondida", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
 };
 
+/** Resumo visual do que o plano entrega (os mesmos três tempos das fases). */
+const PLAN_PREVIEW = [
+  { key: "now" as const, label: "Agora", window: "15 min" },
+  { key: "hour" as const, label: "Primeira hora", window: "1 h" },
+  { key: "day" as const, label: "Próximas 24 h", window: "24 h" },
+];
+
 function IncidentRow({ incident }: { incident: IncidentListItem }) {
+  const Icon = incident.source === "DETECTED" ? ScanSearch : UserRound;
   return (
     <li>
       <Link
         href={`/painel/copiloto/${incident.id}`}
-        className="group flex items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted/60"
+        className="group flex items-center gap-3 rounded-lg px-3 py-3 transition-colors outline-none hover:bg-muted/70 focus-visible:ring-3 focus-visible:ring-ring/50"
       >
+        <span className="flex size-9 shrink-0 items-center justify-center self-start rounded-lg bg-muted text-foreground/70">
+          <Icon className="size-4" aria-hidden />
+        </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-sm font-medium">{incident.title}</span>
+            <span className="text-sm font-medium">{incident.title}</span>
             {incident.lgpdStatus && (
               <span
                 className={cn(
-                  "rounded-full px-2 py-px text-[11px] font-medium ring-1",
+                  "rounded-full px-2 py-px text-[11px] font-medium ring-1 ring-inset",
                   LGPD_BADGE[incident.lgpdStatus].className,
                 )}
               >
@@ -68,129 +80,141 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
   if (!result.ok && result.reason === "unauthorized") redirect("/?sessao=expirada");
 
   if (!result.ok) {
-    return (
-      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
-        <Radar className="size-8 text-muted-foreground" aria-hidden />
-        <h1 className="text-xl font-semibold">Não conseguimos carregar o copiloto</h1>
-        <p className="text-sm text-muted-foreground">A API não respondeu. Tente de novo em alguns segundos.</p>
-        <Link href="/painel/copiloto" className={buttonVariants({ variant: "outline" })}>
-          Tentar de novo
-        </Link>
-      </div>
-    );
+    return <ErrorState title="Não conseguimos carregar o copiloto" retryHref="/painel/copiloto" />;
   }
 
   const { incidents, breachesWithoutPlan } = result.data;
 
   return (
-    <div className="min-h-screen bg-muted/40">
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-        <Link
-          href="/painel"
-          className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden />
-          Voltar ao painel
-        </Link>
-
-        <div className="flex flex-col gap-1">
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <LifeBuoy className="size-6 text-muted-foreground" aria-hidden />
-            Copiloto de resposta a incidentes
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
+    <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+      <div className="flex flex-col gap-4">
+        <div className="flex max-w-2xl flex-col gap-1.5">
+          <span className="eyebrow text-brand">Resposta a incidentes</span>
+          <h1 className="text-3xl font-semibold tracking-tight">Copiloto de resposta a incidentes</h1>
+          <p className="text-sm leading-relaxed text-muted-foreground">
             Conte o que aconteceu ou escolha um vazamento detectado. Você recebe um plano para os próximos 15 minutos,
             1 hora e 24 horas e, quando há uma empresa envolvida, a notificação LGPD pronta.
           </p>
         </div>
+        <ol className="flex flex-wrap gap-2" aria-label="O que o plano traz">
+          {PLAN_PREVIEW.map((phase) => (
+            <li
+              key={phase.key}
+              className="flex items-center gap-2 rounded-full bg-card px-3 py-1.5 text-xs shadow-xs ring-1 ring-border"
+            >
+              <span className={cn("size-1.5 rounded-full", PHASE_DOT[phase.key])} aria-hidden />
+              <span className="font-mono font-medium">{phase.window}</span>
+              <span className="text-muted-foreground">{phase.label}</span>
+            </li>
+          ))}
+          <li className="flex items-center gap-2 rounded-full bg-ink px-3 py-1.5 text-xs text-ink-foreground">
+            <ScanText className="size-3.5 text-signal" aria-hidden />
+            Notificação LGPD
+          </li>
+        </ol>
+      </div>
 
-        {erro === "plano" && (
-          <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200">
-            Não conseguimos abrir o plano desse vazamento agora. Tente de novo em instantes.
-          </p>
-        )}
+      {erro === "plano" && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          Não conseguimos abrir o plano desse vazamento agora. Tente de novo em instantes.
+        </p>
+      )}
 
-        <div className="grid items-start gap-4 lg:grid-cols-5">
-          <Card className="min-w-0 lg:col-span-3">
-            <CardHeader>
-              <CardTitle>O que aconteceu?</CardTitle>
-              <CardDescription>
-                Golpe do Pix, celular roubado, WhatsApp clonado, link falso ou conta aberta em seu nome.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ReportForm />
-            </CardContent>
-          </Card>
+      <div className="grid items-start gap-4 lg:grid-cols-5">
+        <Card className="min-w-0 lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold tracking-tight">O que aconteceu?</CardTitle>
+            <CardDescription>
+              Golpe do Pix, celular roubado, WhatsApp clonado, link falso ou conta aberta em seu nome.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ReportForm />
+          </CardContent>
+        </Card>
 
-          <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
-            {breachesWithoutPlan.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ScanSearch className="size-4 text-muted-foreground" aria-hidden />
-                    Vazamentos sem plano
-                  </CardTitle>
-                  <CardDescription>Detectados pelo monitoramento com os seus dados.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ul className="flex flex-col divide-y">
-                    {breachesWithoutPlan.map((breach) => (
-                      <li key={breach.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                        <div className="flex min-w-0 flex-col gap-0.5">
-                          <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                            {breach.company}
-                            {breach.isNew && (
-                              <span className="rounded-full bg-red-600 px-2 py-px text-[11px] font-semibold text-white">
-                                Novo
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Detectado em {formatDate(breach.detectedAt)}
-                          </span>
-                        </div>
-                        <form action={openBreachPlan.bind(null, breach.id)}>
-                          <SubmitButton size="sm" variant="outline" pendingText="Abrindo...">
-                            Gerar plano
-                          </SubmitButton>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
-
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+          {breachesWithoutPlan.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileWarning className="size-4 text-muted-foreground" aria-hidden />
-                  Seus incidentes
+                <CardTitle className="flex items-center gap-2.5">
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-signal">
+                    <ScanSearch className="size-4" aria-hidden />
+                  </span>
+                  Vazamentos sem plano
                 </CardTitle>
-                <CardDescription>Planos em andamento e o prazo de cada notificação.</CardDescription>
+                <CardDescription>Detectados pelo monitoramento com os seus dados.</CardDescription>
               </CardHeader>
               <CardContent>
-                {incidents.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum incidente ainda. Quando você relatar algo ou abrir o plano de um vazamento, ele aparece aqui.
-                  </p>
-                ) : (
-                  <ul className="-mx-3 flex flex-col">
-                    {incidents.map((incident) => (
-                      <IncidentRow key={incident.id} incident={incident} />
-                    ))}
-                  </ul>
-                )}
+                <ul className="flex flex-col gap-2">
+                  {breachesWithoutPlan.map((breach) => (
+                    <li
+                      key={breach.id}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 ring-1 ring-inset",
+                        breach.isNew ? "bg-red-50/60 ring-red-200" : "ring-border",
+                      )}
+                    >
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                          {breach.company}
+                          {breach.isNew && (
+                            <span className="rounded-full bg-red-600 px-2 py-px text-[11px] font-semibold text-white">
+                              Novo
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Detectado em {formatDate(breach.detectedAt)}
+                        </span>
+                      </div>
+                      <form action={openBreachPlan.bind(null, breach.id)} className="shrink-0">
+                        <SubmitButton size="sm" variant={breach.isNew ? "default" : "outline"} pendingText="Abrindo...">
+                          Gerar plano
+                        </SubmitButton>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
-          </div>
-        </div>
-      </main>
+          )}
 
-      <footer className="mx-auto max-w-6xl px-4 pb-10 text-xs text-muted-foreground sm:px-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2.5">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-signal">
+                  <FileWarning className="size-4" aria-hidden />
+                </span>
+                Seus incidentes
+              </CardTitle>
+              <CardDescription>Planos em andamento e o prazo de cada notificação.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {incidents.length === 0 ? (
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  Nenhum incidente ainda. Quando você relatar algo ou abrir o plano de um vazamento, ele aparece aqui.
+                </p>
+              ) : (
+                <ul className="-mx-3 flex flex-col">
+                  {incidents.map((incident) => (
+                    <IncidentRow key={incident.id} incident={incident} />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <p className="flex items-start gap-2 rounded-lg bg-muted/60 px-4 py-3 text-xs text-muted-foreground">
+        <Info className="mt-px size-3.5 shrink-0" aria-hidden />
         Radar360 · Orientações informativas, baseadas em fontes oficiais. Não é assessoria jurídica.
-      </footer>
-    </div>
+      </p>
+    </main>
   );
 }

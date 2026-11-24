@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Database, ListChecks, ShieldCheck, Wifi } from "lucide-react";
+import { ArrowRight, Database, LifeBuoy, ListChecks, ShieldCheck, Wifi } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Dashboard, DataClass, Finding, ScanSummary } from "@/lib/dashboard";
 import { plural } from "@/lib/format";
@@ -20,23 +20,34 @@ function StatTile({
   hintTone?: "muted" | "alert" | "ok";
 }) {
   return (
-    <Card size="sm">
-      <CardContent className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon className="size-3.5" aria-hidden />
-          {label}
-        </div>
-        <div className="text-3xl font-semibold tabular-nums tracking-tight">{value}</div>
-        <div
+    <Card size="sm" className="sm:[--card-spacing:--spacing(4)]">
+      {/* Celular: linha (ícone, rótulo e número). Telas maiores: bloco vertical. */}
+      <CardContent className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start sm:gap-y-2">
+        <span
           className={cn(
-            "text-xs",
+            "col-start-1 row-span-2 row-start-1 flex size-9 items-center justify-center rounded-lg sm:col-start-2 sm:row-span-1 sm:size-8",
+            hintTone === "alert" ? "bg-red-50 text-red-600" : "bg-muted text-foreground/70",
+          )}
+        >
+          <Icon className="size-4" aria-hidden />
+        </span>
+        <span className="col-start-2 row-start-1 text-[13px] leading-snug text-muted-foreground sm:col-start-1">
+          {label}
+        </span>
+        <span className="col-start-3 row-span-2 row-start-1 text-3xl font-semibold tracking-tight tabular-nums sm:col-span-2 sm:col-start-1 sm:row-span-1 sm:row-start-2 sm:text-4xl">
+          {value}
+        </span>
+        <span
+          className={cn(
+            "col-start-2 row-start-2 flex items-center gap-1.5 text-xs sm:col-span-2 sm:col-start-1 sm:row-start-3",
             hintTone === "alert" && "font-medium text-red-600",
             hintTone === "ok" && "text-emerald-700",
             hintTone === "muted" && "text-muted-foreground",
           )}
         >
+          {hintTone === "alert" && <span className="size-1.5 shrink-0 rounded-full bg-red-500" aria-hidden />}
           {hint}
-        </div>
+        </span>
       </CardContent>
     </Card>
   );
@@ -44,7 +55,7 @@ function StatTile({
 
 export function StatTiles({ summary }: { summary: Dashboard["summary"] }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
       <StatTile
         icon={Database}
         label="Vazamentos com seus dados"
@@ -139,22 +150,22 @@ export function FirstSteps({ dashboard }: { dashboard: Dashboard }) {
     <Card className="flex-1">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ListChecks className="size-4 text-muted-foreground" aria-hidden />
+          <ListChecks className="size-4 text-brand" aria-hidden />
           Por onde começar
         </CardTitle>
         <CardDescription>Os passos que mais reduzem o seu risco agora, em ordem de prioridade.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-4">
         {steps.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhuma ação urgente. Continue com o monitoramento ativo.</p>
         ) : (
           <ol className="flex flex-col divide-y">
             {steps.map((step, index) => (
-              <li key={step.key} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">
+              <li key={step.key} className="flex gap-3.5 py-3.5 first:pt-0 last:pb-0">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink font-mono text-xs font-semibold text-signal">
                   {index + 1}
                 </span>
-                <div className="flex min-w-0 flex-col gap-0.5">
+                <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-medium">{step.title}</span>
                     {step.severity && (
@@ -164,7 +175,7 @@ export function FirstSteps({ dashboard }: { dashboard: Dashboard }) {
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground">{step.source}</span>
-                  <p className="text-sm">{step.description}</p>
+                  <p className="text-sm leading-relaxed text-foreground/85">{step.description}</p>
                 </div>
               </li>
             ))}
@@ -172,10 +183,13 @@ export function FirstSteps({ dashboard }: { dashboard: Dashboard }) {
         )}
         <Link
           href="/painel/copiloto"
-          className="mt-4 flex items-center gap-1.5 border-t pt-3 text-xs font-medium text-foreground/80 hover:text-foreground"
+          className="group flex items-center gap-3 rounded-lg bg-accent px-3.5 py-3 text-[13px] font-medium text-accent-foreground ring-1 ring-brand/10 transition-colors outline-none hover:bg-accent/70 focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          <ArrowRight className="size-3.5" aria-hidden />
-          Plano completo para 15 min, 1 h e 24 h, com a notificação LGPD pronta: abra o copiloto
+          <LifeBuoy className="size-4 shrink-0" aria-hidden />
+          <span className="flex-1">
+            Plano completo para 15 min, 1 h e 24 h, com a notificação LGPD pronta: abra o copiloto
+          </span>
+          <ArrowRight className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden />
         </Link>
       </CardContent>
     </Card>

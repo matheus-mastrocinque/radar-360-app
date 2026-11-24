@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { API_URL } from "./api";
 
 /** Espelho do JSON de GET /me/dashboard (apps/api/src/modules/dashboard/service.ts). */
@@ -104,3 +105,9 @@ export async function fetchDashboard(token: string): Promise<DashboardResult> {
     return { ok: false, reason: "unavailable" };
   }
 }
+
+/**
+ * Mesma chamada, memorizada por requisição: o layout do painel (nome e aviso de demo)
+ * e a página do painel compartilham uma única ida à API.
+ */
+export const fetchDashboardOnce = cache(fetchDashboard);
