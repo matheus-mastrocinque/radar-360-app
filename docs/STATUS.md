@@ -6,6 +6,19 @@ Atualizado em 24/11/2026, depois do deploy em produção.
 
 Este arquivo diz o que está pronto, o que falta para a submissão e quais decisões não ficam óbvias lendo o código. As regras do projeto estão no [`CLAUDE.md`](../CLAUDE.md). Leia os dois antes de começar e atualize este arquivo quando fechar uma tarefa.
 
+## Onde paramos
+
+| Commit | O que entrou |
+| --- | --- |
+| `70bf52e` | Login da demo e painel de exposição |
+| `58b5fd4` | Copiloto de incidentes, com notificação LGPD e petição à ANPD |
+| `7f19217` | Redesign da landing, do painel e do copiloto |
+| `6f0aa53` | Este arquivo |
+| `ee08a45` | Preparação para produção: limites por visitante, teto do Gemini, workflow do job |
+| `6e55eb1` | Correções para a API rodar na Vercel e documentação de produção |
+
+O código em produção é exatamente o do `6e55eb1`.
+
 ## Prazos
 
 | Data | O que acontece |
@@ -50,7 +63,7 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
   | `PATCH /me/incidents/:id/steps` | Marca e desmarca passos do plano |
   | `POST /me/incidents/:id/lgpd` | Registra que a notificação foi enviada ou respondida, ou desfaz o envio |
 
-- **Testes:** 63 testes passando (`npm test`).
+- **Testes:** 67 testes passando (`npm test`).
 
 ### Web (`apps/web`)
 
@@ -58,7 +71,8 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
 - **Painel `/painel`:** score, vazamentos (cada um com o botão "Plano de resposta"), ativos e rede.
 - **Copiloto:** `/painel/copiloto` recebe o relato e lista os incidentes; `/painel/copiloto/[id]` mostra o plano de 15 min, 1 h e 24 h e a notificação LGPD com a petição à ANPD.
 - **Layout comum** (`app/painel/layout.tsx`): navegação, aviso de demo e o aviso "não é assessoria jurídica" no rodapé.
-- **Sessão:** o Next guarda o cookie httpOnly `r360_session` e o repassa à API como Bearer (`lib/session.ts`, `lib/api.ts`).
+- **Sessão:** o Next guarda o cookie httpOnly `r360_session` e o repassa à API como Bearer (`lib/session.ts`).
+- **Chamadas à API:** todas passam por `lib/api-fetch.ts`, que também repassa o IP do visitante. O formulário de relato roda no navegador e, por isso, pega as opções de `lib/report-options.ts`, não de `lib/incidents.ts`.
 
 ### Agente local (`packages/local-agent`)
 
@@ -67,7 +81,7 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
 
 ## O que falta, por prioridade
 
-1. **Ligar o job agendado no GitHub.** Em Settings → Secrets and variables → Actions, crie `RADAR_API_URL` (`https://radar360-api-hazel.vercel.app`) e `RADAR_JOBS_SECRET` (o mesmo `JOBS_SECRET` da API). Depois rode o workflow "Busca de vazamentos" uma vez à mão para conferir.
+1. **Ligar o job agendado no GitHub** (Matheus, que tem o valor do segredo). Em Settings → Secrets and variables → Actions, crie `RADAR_API_URL` (`https://radar360-api-hazel.vercel.app`) e `RADAR_JOBS_SECRET` (o mesmo `JOBS_SECRET` da API). Depois rode o workflow "Busca de vazamentos" uma vez à mão para conferir.
 2. **Cadastro real com e-mail confirmado por link.** Hoje só existe o login da demo. Falta:
    - cadastro e login por link mágico;
    - adicionar CPF e telefone, com o CPF preso a uma única conta e tudo guardado como HMAC.
@@ -75,14 +89,15 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
    Esse é o núcleo 1 e a regra 2 do `CLAUDE.md`.
 3. **Alerta por e-mail só para risco novo,** via Resend com `RESEND_API_KEY`. O job já devolve `newExposures`; falta mandar o e-mail para essas exposições. Sem a chave, o job só registra no log e segue.
 4. **Gemini ao vivo.** Ponha `GEMINI_API_KEY` no `.env` local e, em produção, com `npx vercel env add GEMINI_API_KEY production` na pasta ligada à API. Depois publique a API de novo e teste um relato. Sem a chave, o copiloto classifica por palavras-chave, e já funciona assim.
-5. **Vídeo** (29/11). Mostre o agente rodando na nossa própria rede, já que o júri não roda o agente, e depois o fluxo da demo: painel, vazamento, plano, LGPD e relato.
-6. **README final:** link da demo e prints, sem a linha "esqueleto em construção".
-7. **Texto da submissão:** nome, frase curta e descrição.
-8. **Versões leves,** só se os itens 1 a 3 estiverem prontos até 26/11: leitura de termos e inventário de contas. Se atrasar, corte nesta ordem: inventário, Procon, vulnerabilidade por firmware, leitura de termos.
+5. **Agente local contra a produção.** Ainda não foi testado. Rode `scanner.py --mode home --api https://radar360-api-hazel.vercel.app --token <token de produção>` na nossa rede e confira a auditoria no painel. Isso já serve de ensaio para o vídeo.
+6. **Vídeo** (29/11). Mostre o agente rodando na nossa própria rede, já que o júri não roda o agente, e depois o fluxo da demo: painel, vazamento, plano, LGPD e relato.
+7. **README final:** o link da demo já está lá; faltam prints e a revisão final.
+8. **Texto da submissão:** nome, frase curta e descrição. Assim que o vídeo existir, enviem uma primeira versão de garantia: vale a última versão enviada até 30/11 às 23h59.
+9. **Versões leves,** só se os itens 1 a 3 estiverem prontos até 26/11: leitura de termos e inventário de contas. Se atrasar, corte nesta ordem: inventário, Procon, vulnerabilidade por firmware, leitura de termos.
 
 Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perguntando sobre o scanner já foi enviado.
 
-**Divisão sugerida (a combinar):** quem fica com API, worker e agente pega os itens 1 a 3; quem fica com web e copiloto pega os itens 4 a 7.
+**Divisão sugerida (a combinar):** o item 1 é do Matheus. Os itens 2 e 3 (cadastro e alertas) são o maior bloco de código e cabem em quem pegar API e worker. O resto se divide entre os dois.
 
 ## Decisões que não aparecem só lendo o código
 
@@ -99,7 +114,7 @@ Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perg
 
 ## Produção
 
-Tudo em planos gratuitos, sem cartão, na conta Vercel da dupla:
+Tudo em planos gratuitos, sem cartão, na conta Vercel do Matheus. O plano Hobby não aceita outros membros, então publicar, ver logs e mudar variáveis passa pelo login dele. O Victor trabalha local e pelo GitHub.
 
 | Projeto Vercel | Root Directory | Endereço |
 | --- | --- | --- |
@@ -115,7 +130,7 @@ O banco é um Neon Free em São Paulo (`sa-east-1`), criado pela integração da
 | API | `DATABASE_URL` (da integração), `HMAC_SECRET`, `JOBS_SECRET`, `PROXY_SECRET`, `WEB_ORIGIN`, `PORT=3000` |
 | Web | `API_URL`, `PROXY_SECRET` (o mesmo valor da API) |
 
-Os segredos estão como "Secret": nem a CLI consegue ler o valor de volta.
+Os segredos estão como "Secret": nem a CLI consegue ler o valor de volta. O `PORT=3000` ficou de um teste e não atrapalha: na Vercel, o `listen()` é interceptado.
 
 **Como publicar de novo:**
 - **Sem Git integrado:** a publicação é feita pela CLI, a partir de uma cópia limpa do commit, para que nenhum `.env` local suba:
@@ -134,7 +149,7 @@ Os segredos estão como "Secret": nem a CLI consegue ler o valor de volta.
 - **Entrada da API:** a Vercel só aceita como entrada um arquivo que importe `fastify` diretamente. Por isso a instância é criada em `server.ts`, e as rotas ficam em `build-app.ts`.
 - **listen() sem `await`:** na Vercel, um `await` no `listen()` deixa toda requisição pendurada.
 - **Limites de uso por visitante:** o site repassa o IP do visitante à API, protegido pelo `PROXY_SECRET`. Sem ele, todos os visitantes contariam como um só IP.
-- **Token do agente local de produção:** foi gerado no seed de 24/11 e vale 30 dias. Peça ao Matheus quando for gravar o vídeo; ele não vai para o git.
+- **Token do agente local de produção:** foi gerado no seed de 24/11 e vale 30 dias, até 24/12. Fica com o Matheus, junto com o `JOBS_SECRET` e o `HMAC_SECRET` de produção, e nunca vai para o git.
 
 ## Como rodar
 
