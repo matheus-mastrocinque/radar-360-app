@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { API_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api-fetch";
 import { getSessionToken } from "@/lib/session";
 
 async function requireToken(): Promise<string> {
@@ -12,12 +12,12 @@ async function requireToken(): Promise<string> {
 }
 
 async function callApi(token: string, path: string, method: string, body: unknown, timeoutMs = 5000) {
-  return fetch(`${API_URL}${path}`, {
+  return apiFetch(path, {
     method,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    token,
+    headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
-    cache: "no-store",
-    signal: AbortSignal.timeout(timeoutMs),
+    timeoutMs,
   });
 }
 

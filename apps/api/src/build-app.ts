@@ -5,6 +5,7 @@ import Fastify, { type FastifyServerOptions } from "fastify";
 import { ZodError } from "zod";
 import { webOrigins, type Env } from "./config/env.js";
 import { HttpError } from "./shared/auth.js";
+import { rateLimitKey } from "./shared/client-ip.js";
 import type { Db } from "./shared/db.js";
 import { authRoutes } from "./modules/auth/routes.js";
 import { breachJobRoutes } from "./modules/breaches/routes.js";
@@ -16,7 +17,7 @@ import { networkRoutes } from "./modules/network/routes.js";
 
 export interface AppDeps {
   db: Db;
-  env: Pick<Env, "WEB_ORIGIN" | "JOBS_SECRET">;
+  env: Pick<Env, "WEB_ORIGIN" | "JOBS_SECRET"> & Partial<Pick<Env, "PROXY_SECRET">>;
   logger?: FastifyServerOptions["logger"];
   /** Classificador de relatos com LLM; sem ele, o copiloto usa só as regras por palavras-chave. */
   classifier?: ReportClassifier | null;
@@ -27,7 +28,7 @@ export async function buildApp({ db, env, logger = true, classifier = null }: Ap
 
   await app.register(helmet);
   await app.register(cors, { origin: webOrigins(env) });
-  await app.register(rateLimit, { global: false });
+  await app.register(rateLimit, { global: false, keyGenerator: rateLimitKey(env.PROXY_SECRET) });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {

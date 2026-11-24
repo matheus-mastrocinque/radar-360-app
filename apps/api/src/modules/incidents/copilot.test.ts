@@ -7,7 +7,13 @@ import {
   REPORTABLE_TYPES,
   playbookFor,
 } from "./catalog.js";
-import { classifyByRules, classifyReport, cleanSummary, type ReportClassifier } from "./classify.js";
+import {
+  classifyByRules,
+  classifyReport,
+  cleanSummary,
+  withHourlyBudget,
+  type ReportClassifier,
+} from "./classify.js";
 import { buildAnpdPetition, buildLgpdNotice, lgpdTimeline } from "./lgpd.js";
 import { applicableSteps, buildPlan } from "./plan.js";
 import { redactPersonalData } from "./redact.js";
@@ -195,6 +201,24 @@ describe("classificação com LLM", () => {
     assert.deepEqual(await classifyReport(text, broken), { ...classifyByRules(text), by: "RULES" });
     assert.equal((await classifyReport(text, unsure)).type, "STOLEN_PHONE");
     assert.equal((await classifyReport(text, null)).by, "RULES");
+  });
+
+  it("teto por hora: passou do limite, cai nas regras; na hora seguinte, volta ao modelo", async () => {
+    let now = 0;
+    let calls = 0;
+    const counted: ReportClassifier = {
+      classify: async (text) => {
+        calls += 1;
+        return ok.classify(text);
+      },
+    };
+    const budgeted = withHourlyBudget(counted, 2, () => now);
+    assert.equal((await classifyReport("relato", budgeted)).by, "AI");
+    assert.equal((await classifyReport("relato", budgeted)).by, "AI");
+    assert.equal((await classifyReport("Roubaram meu celular", budgeted)).by, "RULES");
+    assert.equal(calls, 2, "a terceira chamada não chega ao modelo");
+    now += 60 * 60 * 1000;
+    assert.equal((await classifyReport("relato", budgeted)).by, "AI");
   });
 
   it("sinais possíveis são só os da lista curada", () => {

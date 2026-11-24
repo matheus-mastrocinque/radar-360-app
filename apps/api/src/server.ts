@@ -1,13 +1,21 @@
-import { buildApp } from "./app.js";
+/**
+ * Ponto de entrada da API: local (`npm run dev`), `node dist/server.js` ou Vercel Functions.
+ * A Vercel procura src/app, src/index e src/server, nessa ordem; por isso o app em si fica em
+ * build-app.ts e este é o único arquivo que chama listen().
+ */
+import { buildApp } from "./build-app.js";
 import { loadEnv } from "./config/env.js";
 import { createDb } from "./shared/db.js";
 import { startBreachCron } from "./modules/breaches/scheduler.js";
-import { createGeminiClassifier } from "./modules/incidents/classify.js";
+import { createGeminiClassifier, withHourlyBudget } from "./modules/incidents/classify.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
 const classifier = env.GEMINI_API_KEY
-  ? createGeminiClassifier({ apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL })
+  ? withHourlyBudget(
+      createGeminiClassifier({ apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL }),
+      env.LLM_MAX_CALLS_PER_HOUR,
+    )
   : null;
 const app = await buildApp({ db, env, classifier });
 app.log.info(

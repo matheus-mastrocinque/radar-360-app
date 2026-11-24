@@ -79,8 +79,8 @@ Estas regras vêm do regulamento (itens 5.2, 6.8, 6.9 e 7.4) e da segurança do 
 │   │   ├── prisma/           # schema.prisma, migrations, seed.ts
 │   │   ├── prisma.config.ts
 │   │   └── src/
-│   │       ├── app.ts        # buildApp(): plugins e rotas
-│   │       ├── server.ts     # sobe o servidor e o cron opcional
+│   │       ├── build-app.ts  # buildApp(): plugins e rotas
+│   │       ├── server.ts     # único entrypoint (listen): local, node e Vercel; cron opcional
 │   │       ├── config/env.ts # variáveis validadas com Zod
 │   │       ├── shared/       # db, crypto (HMAC, máscaras, CPF), auth
 │   │       └── modules/      # health, network, breaches, (incidents, lgpd, assets...)
@@ -104,7 +104,7 @@ python packages/local-agent/scanner.py --mode public --dry-run
 
 Os jobs periódicos rodam de dois jeitos:
 - **Servidor sempre ligado:** `RUN_CRON=true`.
-- **Cloud Scheduler:** `POST /internal/jobs/breach-check` com o header `X-Jobs-Secret`.
+- **Produção (Vercel):** o workflow `.github/workflows/breach-check.yml` chama `POST /internal/jobs/breach-check` com o header `X-Jobs-Secret` a cada 6 horas.
 
 ## 6. Convenções
 

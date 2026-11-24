@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
-import { buildApp } from "./app.js";
+import type { FastifyRequest } from "fastify";
+import { buildApp } from "./build-app.js";
 import type { ReportClassifier } from "./modules/incidents/classify.js";
+import { CLIENT_IP_HEADER, PROXY_SECRET_HEADER, rateLimitKey } from "./shared/client-ip.js";
 import type { Db } from "./shared/db.js";
 
 const env = { WEB_ORIGIN: "http://localhost:3000", JOBS_SECRET: "jobs-secret-for-tests" };
@@ -309,5 +311,27 @@ describe("API", () => {
       });
       assert.equal(response.statusCode, 400);
     });
+  });
+});
+
+describe("limites de uso por visitante", () => {
+  const secret = "segredo-do-proxy-para-testes";
+  const request = (headers: Record<string, string>) => ({ ip: "10.0.0.1", headers }) as unknown as FastifyRequest;
+
+  it("usa o IP repassado pelo site quando o segredo confere", () => {
+    const key = rateLimitKey(secret);
+    assert.equal(key(request({ [CLIENT_IP_HEADER]: "203.0.113.7", [PROXY_SECRET_HEADER]: secret })), "203.0.113.7");
+  });
+
+  it("ignora o header com segredo errado, sem segredo ou com IP inválido", () => {
+    const key = rateLimitKey(secret);
+    assert.equal(key(request({ [CLIENT_IP_HEADER]: "203.0.113.7", [PROXY_SECRET_HEADER]: "outro" })), "10.0.0.1");
+    assert.equal(key(request({ [CLIENT_IP_HEADER]: "203.0.113.7" })), "10.0.0.1");
+    assert.equal(key(request({ [CLIENT_IP_HEADER]: "não é ip", [PROXY_SECRET_HEADER]: secret })), "10.0.0.1");
+  });
+
+  it("sem PROXY_SECRET configurado, vale sempre o IP da conexão", () => {
+    const key = rateLimitKey(undefined);
+    assert.equal(key(request({ [CLIENT_IP_HEADER]: "203.0.113.7", [PROXY_SECRET_HEADER]: secret })), "10.0.0.1");
   });
 });

@@ -1,4 +1,4 @@
-import { API_URL } from "./api";
+import { apiFetch } from "./api-fetch";
 import type { DataClass } from "./dashboard";
 
 /** Tipos espelhados da API (apps/api/src/modules/incidents). */
@@ -99,24 +99,11 @@ export interface IncidentView {
   disclaimer: string;
 }
 
-/** Opções do formulário de relato. Mesmo texto curto da API, para escolher sem esperar o LLM. */
-export const REPORT_OPTIONS: Array<{ type: ReportableType; label: string; example: string }> = [
-  { type: "PIX_SCAM", label: "Golpe do Pix", example: "Fiz um Pix para um falso vendedor" },
-  { type: "STOLEN_PHONE", label: "Celular roubado", example: "Levaram meu celular na rua" },
-  { type: "ACCOUNT_TAKEOVER", label: "Conta invadida ou WhatsApp clonado", example: "Clonaram meu WhatsApp" },
-  { type: "PHISHING", label: "Link ou site falso", example: "Digitei a senha num site falso" },
-  { type: "IDENTITY_FRAUD", label: "Conta ou dívida em meu nome", example: "Abriram um empréstimo no meu CPF" },
-];
-
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; reason: "unauthorized" | "not_found" | "unavailable" };
 
 async function getJson<T>(token: string, path: string): Promise<ApiResult<T>> {
   try {
-    const response = await fetch(`${API_URL}${path}`, {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
+    const response = await apiFetch(path, { token });
     if (response.status === 401) return { ok: false, reason: "unauthorized" };
     if (response.status === 404) return { ok: false, reason: "not_found" };
     if (!response.ok) return { ok: false, reason: "unavailable" };

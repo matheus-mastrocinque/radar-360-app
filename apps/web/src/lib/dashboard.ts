@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { API_URL } from "./api";
+import { apiFetch } from "./api-fetch";
 
 /** Espelho do JSON de GET /me/dashboard (apps/api/src/modules/dashboard/service.ts). */
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
@@ -93,11 +93,7 @@ export type DashboardResult =
 
 export async function fetchDashboard(token: string): Promise<DashboardResult> {
   try {
-    const response = await fetch(`${API_URL}/me/dashboard`, {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
+    const response = await apiFetch("/me/dashboard", { token });
     if (response.status === 401) return { ok: false, reason: "unauthorized" };
     if (!response.ok) return { ok: false, reason: "unavailable" };
     return { ok: true, data: (await response.json()) as Dashboard };

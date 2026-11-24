@@ -4,7 +4,8 @@ import { useActionState, useState } from "react";
 import { AlertTriangle, ArrowRight, Check, ShieldCheck, Sparkles } from "lucide-react";
 import { reportIncident, type ReportState } from "@/app/painel/copiloto/actions";
 import { SubmitButton } from "@/components/submit-button";
-import { REPORT_OPTIONS, type ReportableType } from "@/lib/incidents";
+import type { ReportableType } from "@/lib/incidents";
+import { REPORT_OPTIONS } from "@/lib/report-options";
 import { cn } from "@/lib/utils";
 
 const MAX_LENGTH = 2000;

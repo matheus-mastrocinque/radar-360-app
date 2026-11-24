@@ -7,7 +7,8 @@ export async function getApiHealth(): Promise<ApiHealth> {
   try {
     const response = await fetch(`${API_URL}/health`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(2000),
+      // Em produção a API e o banco dormem quando ninguém usa; acordar leva um ou dois segundos.
+      signal: AbortSignal.timeout(5000),
     });
     const body = (await response.json()) as { database?: "ok" | "error" };
     return { online: true, database: body.database ?? "error" };

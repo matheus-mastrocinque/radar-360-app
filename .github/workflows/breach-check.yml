@@ -1,0 +1,30 @@
+# Busca periódica de vazamentos em produção.
+# A API roda como função da Vercel, que não mantém um processo ligado para o node-cron.
+# Este workflow chama POST /internal/jobs/breach-check a cada 6 horas (e sob demanda).
+# Secrets do repositório: RADAR_API_URL (sem barra no fim) e RADAR_JOBS_SECRET (= JOBS_SECRET da API).
+name: Busca de vazamentos
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  breach-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Chamar o job da API
+        env:
+          API_URL: ${{ secrets.RADAR_API_URL }}
+          JOBS_SECRET: ${{ secrets.RADAR_JOBS_SECRET }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$JOBS_SECRET" ]; then
+            echo "::warning::Configure os secrets RADAR_API_URL e RADAR_JOBS_SECRET no repositório."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 60 --retry 2 --retry-delay 15 \
+            -X POST "$API_URL/internal/jobs/breach-check" \
+            -H "X-Jobs-Secret: $JOBS_SECRET"

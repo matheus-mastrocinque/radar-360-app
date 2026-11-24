@@ -3,7 +3,7 @@ import type { Db } from "../../shared/db.js";
 import { requireJobsSecret } from "../../shared/auth.js";
 import { runBreachCheck } from "./job.js";
 
-/** Rota chamada pelo Cloud Scheduler quando a API roda em ambiente que desliga quando ocioso. */
+/** Rota chamada pelo agendador (em produção, o GitHub Actions) quando a API não tem processo sempre ligado. */
 export async function breachJobRoutes(app: FastifyInstance, opts: { db: Db; jobsSecret: string }) {
   app.post(
     "/internal/jobs/breach-check",

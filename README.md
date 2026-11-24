@@ -73,7 +73,7 @@ npm run typecheck
 ## Jobs periódicos
 
 - **Servidor sempre ligado:** `RUN_CRON=true` faz a API rodar o cruzamento de vazamentos sozinha.
-- **Ambiente que desliga quando ocioso** (por exemplo, Cloud Run): agende `POST /internal/jobs/breach-check` com o header `X-Jobs-Secret`.
+- **Produção (Vercel, sem processo sempre ligado):** o workflow [`breach-check.yml`](.github/workflows/breach-check.yml) do GitHub Actions chama `POST /internal/jobs/breach-check` com o header `X-Jobs-Secret` a cada 6 horas.
 
 ## Licença
 

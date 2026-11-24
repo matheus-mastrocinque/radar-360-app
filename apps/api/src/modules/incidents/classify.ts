@@ -191,6 +191,39 @@ export interface Logger {
 }
 
 /** Tenta o LLM; se não houver, falhar ou não reconhecer o tipo, usa as regras. */
+/**
+ * Teto de chamadas ao LLM por hora. Protege a cota gratuita contra abuso (alguém abrindo muitas
+ * sessões demo): passou do teto, o classificador falha e o copiloto cai nas regras, sem erro para
+ * o usuário. A contagem é por instância da API, o que basta como freio.
+ */
+export class LlmBudgetExceeded extends Error {
+  constructor() {
+    super("LLM hourly budget exhausted");
+  }
+}
+
+export function withHourlyBudget(
+  classifier: ReportClassifier,
+  maxPerHour: number,
+  clock: () => number = Date.now,
+): ReportClassifier {
+  const HOUR_MS = 60 * 60 * 1000;
+  let windowStart = clock();
+  let used = 0;
+  return {
+    async classify(text) {
+      const now = clock();
+      if (now - windowStart >= HOUR_MS) {
+        windowStart = now;
+        used = 0;
+      }
+      if (used >= maxPerHour) throw new LlmBudgetExceeded();
+      used += 1;
+      return classifier.classify(text);
+    },
+  };
+}
+
 export async function classifyReport(
   text: string,
   classifier: ReportClassifier | null,
