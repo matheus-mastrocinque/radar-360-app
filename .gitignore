@@ -10,6 +10,9 @@ next-env.d.ts
 # Cliente Prisma gerado
 apps/api/src/generated/
 
+# Vínculo local da CLI da Vercel (ids de projeto e .env puxados)
+.vercel/
+
 # Segredos: nunca versionar .env (use os .env.example)
 .env
 .env.*

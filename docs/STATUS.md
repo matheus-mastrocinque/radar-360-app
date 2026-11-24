@@ -1,6 +1,8 @@
 # Estado do projeto: Radar360
 
-Atualizado em 24/11/2026, no commit `7f19217`.
+Atualizado em 24/11/2026, depois do deploy em produção.
+
+**Demo no ar:** [radar360-web.vercel.app](https://radar360-web.vercel.app) (API: [radar360-api-hazel.vercel.app/health](https://radar360-api-hazel.vercel.app/health)).
 
 Este arquivo diz o que está pronto, o que falta para a submissão e quais decisões não ficam óbvias lendo o código. As regras do projeto estão no [`CLAUDE.md`](../CLAUDE.md). Leia os dois antes de começar e atualize este arquivo quando fechar uma tarefa.
 
@@ -18,10 +20,10 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
 | Item | Situação |
 | --- | --- |
 | Repositório público no GitHub, criado depois de 04/11 às 21h, sem fork nem histórico importado | Pronto: público, criado em 21/11 |
-| Link da demo no ar durante a avaliação, até 12/12 | **Falta o deploy** |
+| Link da demo no ar durante a avaliação, até 12/12 | Pronto: [radar360-web.vercel.app](https://radar360-web.vercel.app), em planos gratuitos |
 | Vídeo de até 3 min, que abre sem login | **Falta** |
 | Nome, frase curta e descrição | **Falta escrever** |
-| README com instruções e link da demo | Existe, mas ainda diz "esqueleto em construção" |
+| README com instruções e link da demo | Tem o link; faltam prints e a revisão final |
 
 **Avaliação:** quatro critérios de peso igual, de 0 a 10 cada: execução técnica, implementação técnica, impacto e comunicação (o vídeo). São precisos 20 de 40 pontos para ir à final.
 
@@ -65,18 +67,14 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
 
 ## O que falta, por prioridade
 
-1. **Deploy, que trava a submissão.**
-   - **O que subir:** web, API e Postgres, num host que não hiberne nem estoure cota até 12/12.
-   - **Variáveis:** no host, configure `HMAC_SECRET` e `JOBS_SECRET` novos (nunca no git), `WEB_ORIGIN` na API e `API_URL` no web.
-   - **Banco:** rode `npm run db:deploy -w @radar/api` e depois o seed. Guarde o token de pareamento que o seed imprime.
-   - **Job:** agende `POST /internal/jobs/breach-check` (Cloud Scheduler ou parecido) ou use `RUN_CRON=true` num servidor sempre ligado.
+1. **Ligar o job agendado no GitHub.** Em Settings → Secrets and variables → Actions, crie `RADAR_API_URL` (`https://radar360-api-hazel.vercel.app`) e `RADAR_JOBS_SECRET` (o mesmo `JOBS_SECRET` da API). Depois rode o workflow "Busca de vazamentos" uma vez à mão para conferir.
 2. **Cadastro real com e-mail confirmado por link.** Hoje só existe o login da demo. Falta:
    - cadastro e login por link mágico;
    - adicionar CPF e telefone, com o CPF preso a uma única conta e tudo guardado como HMAC.
 
    Esse é o núcleo 1 e a regra 2 do `CLAUDE.md`.
 3. **Alerta por e-mail só para risco novo,** via Resend com `RESEND_API_KEY`. O job já devolve `newExposures`; falta mandar o e-mail para essas exposições. Sem a chave, o job só registra no log e segue.
-4. **Gemini ao vivo.** Ponha `GEMINI_API_KEY` no `.env` local e no host e teste a classificação de um relato. Sem a chave, o copiloto classifica por palavras-chave, e já funciona assim.
+4. **Gemini ao vivo.** Ponha `GEMINI_API_KEY` no `.env` local e, em produção, com `npx vercel env add GEMINI_API_KEY production` na pasta ligada à API. Depois publique a API de novo e teste um relato. Sem a chave, o copiloto classifica por palavras-chave, e já funciona assim.
 5. **Vídeo** (29/11). Mostre o agente rodando na nossa própria rede, já que o júri não roda o agente, e depois o fluxo da demo: painel, vazamento, plano, LGPD e relato.
 6. **README final:** link da demo e prints, sem a linha "esqueleto em construção".
 7. **Texto da submissão:** nome, frase curta e descrição.
@@ -98,6 +96,45 @@ Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perg
   - leituras: 60 por minuto;
   - escritas: 30 por minuto.
 - **Modelo do Gemini:** o padrão é `gemini-3.5-flash-lite` e pode ser trocado com `GEMINI_MODEL`.
+
+## Produção
+
+Tudo em planos gratuitos, sem cartão, na conta Vercel da dupla:
+
+| Projeto Vercel | Root Directory | Endereço |
+| --- | --- | --- |
+| `radar360-web` | `apps/web` | [radar360-web.vercel.app](https://radar360-web.vercel.app) |
+| `radar360-api` | `apps/api` | [radar360-api-hazel.vercel.app](https://radar360-api-hazel.vercel.app/health) |
+
+O banco é um Neon Free em São Paulo (`sa-east-1`), criado pela integração da Vercel e ligado ao `radar360-api`. Ele preenche `DATABASE_URL` (com pool) e `DATABASE_URL_UNPOOLED` (direta).
+
+**Variáveis de produção** (os valores ficam só na Vercel):
+
+| Projeto | Variáveis |
+| --- | --- |
+| API | `DATABASE_URL` (da integração), `HMAC_SECRET`, `JOBS_SECRET`, `PROXY_SECRET`, `WEB_ORIGIN`, `PORT=3000` |
+| Web | `API_URL`, `PROXY_SECRET` (o mesmo valor da API) |
+
+Os segredos estão como "Secret": nem a CLI consegue ler o valor de volta.
+
+**Como publicar de novo:**
+- **Sem Git integrado:** a publicação é feita pela CLI, a partir de uma cópia limpa do commit, para que nenhum `.env` local suba:
+
+  ```bash
+  git archive HEAD | tar -x -C <pasta-vazia>
+  cd <pasta-vazia>
+  npx vercel link --project radar360-api   # ou radar360-web
+  npx vercel deploy --prod
+  ```
+
+- **Migrações:** rode `npx prisma migrate deploy` em `apps/api` com `DATABASE_URL` apontando para a `DATABASE_URL_UNPOOLED`, que você tira de `npx vercel env pull`.
+- **Seed de novo:** precisa do mesmo `HMAC_SECRET` de produção. Se ninguém tiver o valor, gere outro, grave com `npx vercel env add HMAC_SECRET production --force`, rode o seed com esse valor e publique a API de novo.
+
+**Armadilhas já resolvidas:**
+- **Entrada da API:** a Vercel só aceita como entrada um arquivo que importe `fastify` diretamente. Por isso a instância é criada em `server.ts`, e as rotas ficam em `build-app.ts`.
+- **listen() sem `await`:** na Vercel, um `await` no `listen()` deixa toda requisição pendurada.
+- **Limites de uso por visitante:** o site repassa o IP do visitante à API, protegido pelo `PROXY_SECRET`. Sem ele, todos os visitantes contariam como um só IP.
+- **Token do agente local de produção:** foi gerado no seed de 24/11 e vale 30 dias. Peça ao Matheus quando for gravar o vídeo; ele não vai para o git.
 
 ## Como rodar
 

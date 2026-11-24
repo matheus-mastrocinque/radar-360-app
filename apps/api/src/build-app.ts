@@ -1,7 +1,7 @@
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
-import Fastify, { type FastifyServerOptions } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { ZodError } from "zod";
 import { webOrigins, type Env } from "./config/env.js";
 import { HttpError } from "./shared/auth.js";
@@ -23,9 +23,19 @@ export interface AppDeps {
   classifier?: ReportClassifier | null;
 }
 
-export async function buildApp({ db, env, logger = true, classifier = null }: AppDeps) {
-  const app = Fastify({ logger, trustProxy: true });
+/** Opções do servidor: atrás da Vercel (ou de outro proxy), o IP do cliente vem no X-Forwarded-For. */
+export const SERVER_OPTIONS = { trustProxy: true } satisfies FastifyServerOptions;
 
+/** Cria a instância e registra tudo. Usado nos testes; o server.ts cria a instância ele mesmo. */
+export async function buildApp({ logger = true, ...deps }: AppDeps) {
+  return configureApp(Fastify({ ...SERVER_OPTIONS, logger }), deps);
+}
+
+/** Registra plugins, tratamento de erro e rotas numa instância já criada. */
+export async function configureApp<T extends FastifyInstance>(
+  app: T,
+  { db, env, classifier = null }: Omit<AppDeps, "logger">,
+): Promise<T> {
   await app.register(helmet);
   await app.register(cors, { origin: webOrigins(env) });
   await app.register(rateLimit, { global: false, keyGenerator: rateLimitKey(env.PROXY_SECRET) });

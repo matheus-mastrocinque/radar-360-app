@@ -10,7 +10,7 @@ O Radar360 é uma plataforma de cibersegurança pessoal, criada para o Hack Bras
   - em casa, os aparelhos vulneráveis da rede;
   - em Wi-Fi público, o que o próprio computador está expondo.
 
-> Status: esqueleto do projeto em construção. Demo pública: _em breve_.
+> **Demo pública:** [radar360-web.vercel.app](https://radar360-web.vercel.app). Clique em "Entrar como demo": a persona e todos os dados são fictícios.
 
 ## Arquitetura
 
@@ -74,6 +74,17 @@ npm run typecheck
 
 - **Servidor sempre ligado:** `RUN_CRON=true` faz a API rodar o cruzamento de vazamentos sozinha.
 - **Produção (Vercel, sem processo sempre ligado):** o workflow [`breach-check.yml`](.github/workflows/breach-check.yml) do GitHub Actions chama `POST /internal/jobs/breach-check` com o header `X-Jobs-Secret` a cada 6 horas.
+
+## Produção (custo zero)
+
+| Parte | Onde | Endereço |
+| --- | --- | --- |
+| Web (Next.js) | Vercel, plano Hobby | [radar360-web.vercel.app](https://radar360-web.vercel.app) |
+| API (Fastify) | Vercel Functions, `src/server.ts` como entrypoint | [radar360-api-hazel.vercel.app](https://radar360-api-hazel.vercel.app/health) |
+| Banco | Neon Free (Postgres), São Paulo | via integração da Vercel |
+| Job de vazamentos | GitHub Actions, a cada 6 horas | [`breach-check.yml`](.github/workflows/breach-check.yml) |
+
+Detalhes de configuração e de como publicar de novo estão em [`docs/STATUS.md`](docs/STATUS.md).
 
 ## Licença
 
