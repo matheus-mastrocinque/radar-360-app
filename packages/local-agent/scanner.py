@@ -13,9 +13,19 @@ Two modes:
 
 Allowed network actions (home mode only, after consent): TCP connect checks,
 passively reading the banner a service sends on connect, one plain ``GET /``
-(max 4 KB) on HTTP ports, SSDP M-SEARCH and fetching the UPnP device
-description from a LOCATION inside the scanned subnet. Nothing else: no logins,
-no passwords, no exploits, no fuzzing. The agent never changes system settings.
+(max 4 KB) on HTTP ports, SSDP M-SEARCH, fetching the UPnP device description
+from a LOCATION inside the scanned subnet and listing the router's UPnP port
+mappings (``GetGenericPortMappingEntry``). Nothing else: no logins, no
+passwords, no exploits, no fuzzing.
+
+Fix mode (``--corrigir``): after the audit, the agent offers safe fixes for
+THIS computer (firewall, network profile, file sharing, Remote Desktop, port
+block rule) and for the user's OWN router (removing UPnP port mappings with
+``DeletePortMapping``). Each fix shows what changes, the exact command, the
+risk and how to undo it, and is applied only after the user types ``SIM``.
+There is no way to apply everything at once. Every applied fix is written to a
+local journal so ``--desfazer`` can revert it (``AddPortMapping`` is used only
+to undo a removed mapping). ``--simular`` shows the fixes without applying.
 
 Standard library only. Python 3.11+. Windows, macOS and Linux.
 """
@@ -35,6 +45,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import socket
 import struct
 import subprocess
@@ -53,6 +64,7 @@ TOKEN_ENV_VAR = "RADAR360_PAIRING_TOKEN"
 EXIT_OK = 0
 EXIT_REFUSED = 1
 EXIT_UPLOAD_FAILED = 3
+EXIT_FIX_FAILED = 4  # --desfazer: at least one undo failed or was skipped
 
 # --- Home-mode scan limits ---------------------------------------------------
 HOME_PORTS = (
@@ -74,10 +86,33 @@ DESCRIPTION_READ_LIMIT = 64 * 1024
 DESCRIPTION_TIMEOUT = 3.0
 MAX_DESCRIPTION_FETCHES = 32
 
+# --- UPnP IGD: the user's own router (home mode, after consent) --------------
+UPNP_TIMEOUT = 3.0
+UPNP_READ_LIMIT = 16 * 1024
+MAX_UPNP_MAPPINGS = 64       # GetGenericPortMappingEntry index cap
+MAX_IGD_SERVICES = 4
+UPNP_RELIST_CAP = 30.0       # time cap for listing mappings again after fixes
+UPNP_ALLOWED_ACTIONS = frozenset({"GetGenericPortMappingEntry", "DeletePortMapping", "AddPortMapping"})
+UPNP_SENSITIVE_PORTS = frozenset({23, 22, 3389, 445, 139, 5900, 1883, 3306, 5432, 6379, 27017, 7547})
+_WAN_SERVICE_RE = re.compile(
+    r"^urn:schemas-upnp-org:service:(?:WANIPConnection|WANPPPConnection):[12]$"
+)
+
 # --- Local commands / upload -------------------------------------------------
 CMD_TIMEOUT = 10.0
 POWERSHELL_TIMEOUT = 20.0
 UPLOAD_TIMEOUT = 15.0
+FIX_CMD_TIMEOUT = 120.0  # the Windows firewall cmdlets can take 15-40 s just to load
+
+# --- Fixes (always one at a time, each confirmed with SIM) -------------------
+MAX_FIXES = 50
+MAX_FIX_TITLE = 200
+FIX_TARGETS = ("computer", "router")
+JOURNAL_VERSION = 1
+SMB_RULE_GROUP = "@FirewallAPI.dll,-28502"  # "File and Printer Sharing" in any Windows language
+BLOCK_RULE_PREFIX = "Olharium-Block-TCP-"
+RDP_KEY = r"HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server"
+MACOS_SOCKETFILTERFW = "/usr/libexec/ApplicationFirewall/socketfilterfw"
 
 # --- Payload contract limits -------------------------------------------------
 MAX_DEVICES = 256
@@ -178,8 +213,7 @@ def _decode_output(data: bytes) -> str:
     return data.decode("latin-1", errors="replace")
 
 
-def run_cmd(cmd: list[str], timeout: float = CMD_TIMEOUT) -> str | None:
-    """Run a local, read-only OS command. Never raises: returns None on failure."""
+def _subprocess_kwargs() -> dict:
     kwargs: dict = {}
     if os.name == "nt":
         kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -188,6 +222,12 @@ def run_cmd(cmd: list[str], timeout: float = CMD_TIMEOUT) -> str | None:
         env["LC_ALL"] = "C"
         env["LANG"] = "C"
         kwargs["env"] = env
+    return kwargs
+
+
+def run_cmd(cmd: list[str], timeout: float = CMD_TIMEOUT) -> str | None:
+    """Run a local, read-only OS command. Never raises: returns None on failure."""
+    kwargs = _subprocess_kwargs()
     try:
         proc = subprocess.run(
             cmd,
@@ -204,6 +244,24 @@ def run_cmd(cmd: list[str], timeout: float = CMD_TIMEOUT) -> str | None:
     if proc.returncode != 0 and not output.strip():
         return None
     return output
+
+
+def run_change_cmd(cmd: list[str], timeout: float = FIX_CMD_TIMEOUT) -> tuple[int | None, str]:
+    """Run a command that CHANGES the system. Only called for a fix/undo the user confirmed."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            timeout=timeout,
+            check=False,
+            **_subprocess_kwargs(),
+        )
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        return None, str(exc)
+    output = (_decode_output(proc.stdout) + "\n" + _decode_output(proc.stderr)).strip()
+    return proc.returncode, output
 
 
 def read_text_file(path: str) -> str | None:
@@ -955,7 +1013,13 @@ def parse_connection_profiles(text: str) -> list[dict]:
         if not isinstance(item, dict):
             continue
         category = mapping.get(str(item.get("NetworkCategory")).strip().lower())
-        profiles.append({"name": str(item.get("Name") or ""), "category": category})
+        profile = {"name": str(item.get("Name") or ""), "category": category}
+        index = item.get("InterfaceIndex")
+        if isinstance(index, int) and not isinstance(index, bool) and 0 < index < 1_000_000:
+            profile["index"] = index
+        if item.get("InterfaceAlias"):
+            profile["alias"] = str(item["InterfaceAlias"])[:64]
+        profiles.append(profile)
     return profiles
 
 
@@ -965,11 +1029,125 @@ def get_connection_profiles(os_name: str) -> list[dict]:
     out = run_cmd(
         [
             "powershell", "-NoProfile", "-NonInteractive", "-Command",
-            "Get-NetConnectionProfile | Select-Object Name,NetworkCategory | ConvertTo-Json",
+            "Get-NetConnectionProfile | Select-Object Name,InterfaceAlias,InterfaceIndex,NetworkCategory "
+            "| ConvertTo-Json",
         ],
         timeout=POWERSHELL_TIMEOUT,
     )
     return parse_connection_profiles(out) if out else []
+
+
+# --- Windows firewall rules relevant to the fixes (read only) ----------------
+
+@dataclasses.dataclass
+class WindowsFirewallRules:
+    known: bool = False
+    blocked_ports: set[int] = dataclasses.field(default_factory=set)  # enabled Olharium block rules
+    smb_public_rules: list[dict] = dataclasses.field(default_factory=list)  # enabled, apply to Public
+    smb_unreadable: int = 0  # rules whose name could not be validated
+
+
+_RULE_NAME_RE = re.compile(r"^[A-Za-z0-9_.{}\-]{1,128}$")
+_BLOCK_RULE_RE = re.compile(rf"^{re.escape(BLOCK_RULE_PREFIX)}(\d{{1,5}})$")
+_RULES_MARKER = "OLHARIUM-FW-RULES"
+_PROFILE_BITS = {"domain": 1, "private": 2, "public": 4}
+
+# Read only, fast and language independent: the local firewall rule store in the registry
+# (one value per rule: name = rule ID, data = "v2.x|Action=..|Active=..|Dir=..|Profile=..|
+# LPort=..|Name=..|EmbedCtxt=<group>|", grammar documented in [MS-GPFAS]). The NetSecurity
+# cmdlets would take 15-40 s just to load on some machines.
+_FIREWALL_RULES_SCRIPT = (
+    "$k = Get-Item -LiteralPath 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters"
+    "\\FirewallPolicy\\FirewallRules'; "
+    f"'{_RULES_MARKER}'; "
+    "foreach ($n in $k.GetValueNames()) { $v = [string]$k.GetValue($n); "
+    f"if ($n -like '{BLOCK_RULE_PREFIX}*' -or $v -like '*|EmbedCtxt={SMB_RULE_GROUP}|*') "
+    "{ $n + \"`t\" + $v } }"
+)
+
+
+def parse_firewall_rule_data(data: str) -> dict:
+    """``v2.33|Action=Allow|Active=TRUE|Dir=In|Profile=Private|...`` -> fields (Profile as a bitmask)."""
+    fields: dict = {"profiles": 0}
+    for part in data.split("|"):
+        key, separator, value = part.partition("=")
+        if not separator:
+            continue
+        if key == "Profile":
+            fields["profiles"] |= _PROFILE_BITS.get(value.strip().lower(), 0)
+        elif key not in fields:
+            fields[key] = value
+    return fields
+
+
+def parse_windows_firewall_rules(text: str) -> WindowsFirewallRules:
+    lines = (text or "").lstrip("﻿").splitlines()
+    if not lines or lines[0].strip() != _RULES_MARKER:
+        return WindowsFirewallRules()
+    result = WindowsFirewallRules(known=True)
+    for line in lines[1:]:
+        name, separator, data = line.partition("\t")
+        if not separator:
+            continue
+        name = name.strip()
+        fields = parse_firewall_rule_data(data)
+        active = fields.get("Active", "").upper() == "TRUE"
+        inbound = fields.get("Dir", "").lower() == "in"
+        block = _BLOCK_RULE_RE.match(name)
+        if block:
+            port = int(block.group(1))
+            if active and inbound and fields.get("Action", "").lower() == "block" and 1 <= port <= 65535:
+                result.blocked_ports.add(port)
+            continue
+        if fields.get("EmbedCtxt") != SMB_RULE_GROUP or not active or not inbound:
+            continue
+        profiles = fields["profiles"]  # 0 = every profile
+        if profiles and not profiles & _PROFILE_BITS["public"]:
+            continue
+        if not _RULE_NAME_RE.match(name):
+            result.smb_unreadable += 1
+            continue
+        label = fields.get("Name", "")
+        if not label or label.startswith("@"):  # indirect resource string: show the rule ID
+            label = name
+        port = fields.get("LPort")
+        result.smb_public_rules.append({
+            "name": name,
+            "displayName": (label + (f" (porta {port})" if port else ""))[:120],
+            "profile": profiles,
+        })
+    return result
+
+
+def get_windows_firewall_rules(os_name: str) -> WindowsFirewallRules:
+    if os_name != "windows":
+        return WindowsFirewallRules()
+    out = run_cmd(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", _FIREWALL_RULES_SCRIPT],
+        timeout=POWERSHELL_TIMEOUT,
+    )
+    return parse_windows_firewall_rules(out) if out else WindowsFirewallRules()
+
+
+def compute_blocked_ports(
+    firewall: FirewallStatus, rules: WindowsFirewallRules, active_categories: set[str]
+) -> dict[int, str]:
+    """Ports whose inbound traffic the firewall blocks, with the reason (Windows only)."""
+    if firewall.enabled is not True or not rules.known:
+        return {}
+    blocked = {
+        port: f"a regra de bloqueio 'Olharium: bloqueio da porta {port}' do firewall impede "
+              "conexões de entrada"
+        for port in rules.blocked_ports
+    }
+    if active_categories == {"public"} and not rules.smb_public_rules and not rules.smb_unreadable:
+        for port in (445, 139):
+            blocked.setdefault(
+                port,
+                "as regras de 'Compartilhamento de arquivos e impressoras' do firewall estão "
+                "desativadas no perfil Público, que é o perfil da rede atual",
+            )
+    return blocked
 
 
 def get_firewall_status(os_name: str, active_categories: set[str] | None = None) -> FirewallStatus:
@@ -1078,7 +1256,13 @@ def _process_text(items: list[Listener]) -> str:
     return f" Programa: {', '.join(names)}."
 
 
-def build_listener_findings(listeners: list[Listener], firewall_enabled: bool | None) -> list[dict]:
+def build_listener_findings(
+    listeners: list[Listener],
+    firewall_enabled: bool | None,
+    blocked: dict[int, str] | None = None,
+) -> list[dict]:
+    """``blocked`` maps ports the firewall verifiably blocks to the reason (see compute_blocked_ports)."""
+    blocked = blocked or {}
     exposed: dict[int, list[Listener]] = {}
     for listener in listeners:
         if classify_bind(listener.address) != "loopback":
@@ -1105,6 +1289,18 @@ def build_listener_findings(listeners: list[Listener], firewall_enabled: bool | 
     for port in sorted(exposed):
         items = exposed[port]
         rule = PUBLIC_PORT_RULES.get(port)
+        if port in blocked:
+            subject = rule[2] if rule else f"Serviço na porta {port}"
+            findings.append(make_finding(
+                "info", "port_blocked_by_firewall", f"{subject} bloqueado pelo firewall (porta {port})",
+                f"A porta {port}/TCP continua aberta neste computador.{_process_text(items)} Mas "
+                f"{blocked[port]}: outros aparelhos da rede não conseguem se conectar, a menos que "
+                "outra regra do firewall libere essa porta.",
+                "Mantenha o firewall ligado. Se a correção foi feita pelo agente e você precisar do "
+                "acesso de novo, use 'python scanner.py --desfazer'.",
+                None, port,
+            ))
+            continue
         if rule is None:
             others.append((port, items))
             continue
@@ -1193,7 +1389,8 @@ def build_profile_findings(profiles: list[dict]) -> list[dict]:
         "para os outros aparelhos conectados.",
         "Vá em Configurações > Rede e Internet > Wi-Fi (ou Ethernet) > propriedades da rede e "
         "escolha 'Rede pública'. Pelo PowerShell como administrador: Set-NetConnectionProfile "
-        "-InterfaceAlias 'Wi-Fi' -NetworkCategory Public. O agente não altera nada sozinho.",
+        "-InterfaceAlias 'Wi-Fi' -NetworkCategory Public. O agente só muda isso com --corrigir, "
+        "depois que você digita SIM.",
     )]
 
 
@@ -1541,6 +1738,48 @@ def build_home_findings(devices: list[Device]) -> list[dict]:
     return findings
 
 
+def upnp_mapping_is_sensitive(mapping: dict) -> bool:
+    return (mapping.get("externalPort") in UPNP_SENSITIVE_PORTS
+            or mapping.get("internalPort") in UPNP_SENSITIVE_PORTS)
+
+
+def build_upnp_mapping_findings(mappings: list[dict]) -> list[dict]:
+    """One finding per port the router opened to the Internet through UPnP."""
+    findings = []
+    for mapping in mappings:
+        external, protocol = mapping["externalPort"], mapping["protocol"]
+        internal, client = mapping["internalPort"], mapping["internalClient"]
+        sensitive = upnp_mapping_is_sensitive(mapping)
+        service = SERVICE_NAMES.get(internal) or SERVICE_NAMES.get(external)
+        severity = "high" if sensitive else "medium"
+        detail = (
+            f"O roteador {mapping['routerIp']} encaminha a porta externa {external}/{protocol} da "
+            f"Internet para {client}:{internal}" + (f" ({service})" if service else "") + "."
+        )
+        if mapping.get("remoteHost"):
+            detail += f" Só o endereço remoto {mapping['remoteHost']} pode usar essa abertura."
+        if mapping.get("description"):
+            detail += f" Descrição informada por quem pediu a abertura: '{mapping['description'][:80]}'."
+        if mapping.get("enabled", True):
+            detail += " Qualquer pessoa na Internet pode tentar se conectar a esse serviço."
+        else:
+            severity = "low"
+            detail += " O mapeamento está cadastrado, mas desativado no roteador."
+        if sensitive:
+            detail += (" Essa porta é de um serviço muito visado (acesso remoto, banco de dados, "
+                       "compartilhamento ou gerenciamento).")
+        findings.append(make_finding(
+            severity, "upnp_port_mapping",
+            f"Porta {external}/{protocol} aberta para a Internet pelo UPnP",
+            detail,
+            "Se não reconhece essa abertura, feche-a: rode o agente com --corrigir (pede SIM antes) "
+            "ou remova no painel do roteador. Para evitar novas aberturas automáticas, desative o "
+            "UPnP no roteador.",
+            mapping["routerIp"], external,
+        ))
+    return findings
+
+
 # =============================================================================
 # Home-mode probes (ONLY after consent; every function checks the guard)
 # =============================================================================
@@ -1759,12 +1998,12 @@ def ssdp_discover(local_ip: str, network: ipaddress.IPv4Network, wait: float = S
     return results
 
 
-def _xml_tag(text: str, tag: str) -> str | None:
+def _xml_tag(text: str, tag: str, limit: int = 100) -> str | None:
     match = re.search(rf"<(?:\w+:)?{tag}\b[^>]*>(.*?)</(?:\w+:)?{tag}\s*>", text, re.S | re.I)
     if not match:
         return None
     value = re.sub(r"\s+", " ", html.unescape(match.group(1))).strip()
-    return value[:100] or None
+    return value[:limit] or None
 
 
 def parse_device_description(xml_text: str) -> dict:
@@ -1823,7 +2062,10 @@ def fetch_device_description(location: str, network: ipaddress.IPv4Network) -> d
         return None
     finally:
         connection.close()
-    return parse_device_description(data.decode("utf-8", errors="replace"))
+    text = data.decode("utf-8", errors="replace")
+    description = parse_device_description(text)
+    description["wanServices"] = parse_wan_services(text, location)
+    return description
 
 
 def fetch_descriptions(ssdp: dict[str, dict], network: ipaddress.IPv4Network, deadline: float) -> dict[str, dict]:
@@ -1843,6 +2085,191 @@ def fetch_descriptions(ssdp: dict[str, dict], network: ipaddress.IPv4Network, de
             if description:
                 results[futures[future]] = description
     return results
+
+
+# --- UPnP IGD: port mappings of the user's own router ------------------------
+# Only three SOAP actions exist in this agent: GetGenericPortMappingEntry (read),
+# DeletePortMapping (a fix the user confirmed with SIM) and AddPortMapping (only
+# to undo a removed mapping). No login, no password, nothing else.
+
+_SERVICE_BLOCK_RE = re.compile(r"<(?:\w+:)?service\b[^>]*>(.*?)</(?:\w+:)?service\s*>", re.S | re.I)
+
+
+def parse_wan_services(xml_text: str, location: str) -> list[dict]:
+    """WANIPConnection/WANPPPConnection services with their absolute controlURL."""
+    base = _xml_tag(xml_text, "URLBase", 300) or location
+    services: list[dict] = []
+    for block in _SERVICE_BLOCK_RE.findall(xml_text):
+        service_type = _xml_tag(block, "serviceType", 200)
+        control = _xml_tag(block, "controlURL", 300)
+        if not service_type or not control or not _WAN_SERVICE_RE.match(service_type):
+            continue
+        try:
+            url = urllib.parse.urljoin(base, control)
+        except ValueError:
+            continue
+        item = {"serviceType": service_type, "controlURL": url}
+        if item not in services:
+            services.append(item)
+    return services[:MAX_IGD_SERVICES]
+
+
+def igd_services(
+    descriptions: dict[str, dict], network: ipaddress.IPv4Network, gateway: str | None
+) -> list[dict]:
+    """IGD services whose controlURL is inside the scanned subnet.
+
+    When the gateway is known, only the gateway's own IGD counts (the user's router): another
+    device that merely announces an IGD is never listed or changed.
+    """
+    services: list[dict] = []
+    for description in descriptions.values():
+        for service in description.get("wanServices") or []:
+            allowed = location_allowed(str(service.get("controlURL") or ""), network)
+            if not allowed or not _WAN_SERVICE_RE.match(str(service.get("serviceType") or "")):
+                continue
+            if gateway and allowed[0] != gateway:
+                continue
+            entry = {
+                "routerIp": allowed[0],
+                "serviceType": service["serviceType"],
+                "controlURL": service["controlURL"],
+            }
+            if entry not in services:
+                services.append(entry)
+    return services[:MAX_IGD_SERVICES]
+
+
+def build_soap_envelope(service_type: str, action: str, arguments: list[tuple[str, str]]) -> bytes:
+    body = "".join(f"<{name}>{html.escape(value, quote=False)}</{name}>" for name, value in arguments)
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>'
+        f'<u:{action} xmlns:u="{html.escape(service_type)}">{body}</u:{action}>'
+        "</s:Body></s:Envelope>"
+    ).encode("utf-8")
+
+
+def _soap_post(url: str, headers: dict, body: bytes, timeout: float) -> tuple[int | None, str]:
+    """The only network primitive for SOAP: no proxy, no redirects, response capped."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+    request = urllib.request.Request(url, data=body, method="POST", headers=headers)
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return response.status, response.read(UPNP_READ_LIMIT).decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        try:
+            text = exc.read(UPNP_READ_LIMIT).decode("utf-8", errors="replace")
+        except Exception:  # pragma: no cover - defensive
+            text = ""
+        return exc.code, text
+    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as exc:
+        return None, str(getattr(exc, "reason", exc))
+
+
+def upnp_soap_call(
+    control_url: str, service_type: str, action: str, arguments: list[tuple[str, str]]
+) -> tuple[int | None, str]:
+    """One SOAP call to the router's IGD. Refuses anything outside the allowed actions/scope."""
+    if action not in UPNP_ALLOWED_ACTIONS:
+        raise ProbeNotAuthorized(f"Ação UPnP não permitida: {action!r}")
+    if not _WAN_SERVICE_RE.match(service_type or ""):
+        raise ProbeNotAuthorized(f"Serviço UPnP não permitido: {service_type!r}")
+    scope = _require_probe_consent()
+    allowed = location_allowed(control_url or "", scope)
+    if not allowed:
+        raise ProbeNotAuthorized(f"Endereço de controle UPnP fora da faixa autorizada: {control_url!r}")
+    host, port, path = allowed
+    _check_probe_target(host)
+    headers = {
+        "Content-Type": 'text/xml; charset="utf-8"',
+        "SOAPAction": f'"{service_type}#{action}"',
+        "User-Agent": USER_AGENT,
+        "Connection": "close",
+    }
+    return _soap_post(
+        f"http://{host}:{port}{path}", headers, build_soap_envelope(service_type, action, arguments),
+        UPNP_TIMEOUT,
+    )
+
+
+def _strict_int(value, low: int, high: int) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value.isdigit():
+            return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if low <= number <= high else None
+
+
+def _printable(text: str | None, limit: int) -> str:
+    return "".join(ch for ch in (text or "") if ch.isprintable())[:limit].strip()
+
+
+def parse_port_mapping_entry(body: str) -> dict | None:
+    """Fields of a GetGenericPortMappingEntry response, validated."""
+    external = _strict_int(_xml_tag(body, "NewExternalPort"), 1, 65535)
+    internal = _strict_int(_xml_tag(body, "NewInternalPort"), 1, 65535)
+    protocol = (_xml_tag(body, "NewProtocol") or "").upper()
+    client = _xml_tag(body, "NewInternalClient") or ""
+    remote = _xml_tag(body, "NewRemoteHost") or ""
+    if external is None or internal is None or protocol not in ("TCP", "UDP") or not _is_ipv4(client):
+        return None
+    if remote and not _is_ipv4(remote):
+        return None
+    enabled = (_xml_tag(body, "NewEnabled") or "1").strip().lower() not in ("0", "false", "no")
+    lease = _strict_int(_xml_tag(body, "NewLeaseDuration") or "0", 0, 2**32 - 1) or 0
+    return {
+        "remoteHost": remote,
+        "externalPort": external,
+        "protocol": protocol,
+        "internalPort": internal,
+        "internalClient": client,
+        "enabled": enabled,
+        "description": _printable(_xml_tag(body, "NewPortMappingDescription", 256), 256),
+        "leaseDuration": lease,
+    }
+
+
+def list_port_mappings(service: dict, deadline: float) -> list[dict]:
+    """GetGenericPortMappingEntry with index 0, 1, 2... until the router answers with an error."""
+    mappings: list[dict] = []
+    for index in range(MAX_UPNP_MAPPINGS):
+        if time.monotonic() > deadline:
+            break
+        status, body = upnp_soap_call(
+            service["controlURL"], service["serviceType"], "GetGenericPortMappingEntry",
+            [("NewPortMappingIndex", str(index))],
+        )
+        if status != 200:
+            break  # 713 SpecifiedArrayIndexInvalid marks the end of the table
+        mapping = parse_port_mapping_entry(body)
+        if mapping is None:
+            continue
+        mapping.update(
+            routerIp=service["routerIp"], controlURL=service["controlURL"],
+            serviceType=service["serviceType"],
+        )
+        mappings.append(mapping)
+    return mappings
+
+
+def list_all_port_mappings(services: list[dict], deadline: float) -> list[dict]:
+    seen: set[tuple] = set()
+    result: list[dict] = []
+    for service in services:
+        for mapping in list_port_mappings(service, deadline):
+            key = (mapping["routerIp"], mapping["externalPort"], mapping["protocol"], mapping["remoteHost"])
+            if key not in seen:
+                seen.add(key)
+                result.append(mapping)
+    return result
 
 
 def assemble_devices(
@@ -1972,8 +2399,37 @@ def _sanitize_finding(finding: dict) -> dict:
     }
 
 
+_ISO_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
+
+
+def _sanitize_fix(fix) -> dict | None:
+    if not isinstance(fix, dict) or fix.get("target") not in FIX_TARGETS:
+        return None
+    applied_at = fix.get("appliedAt")
+    if not isinstance(applied_at, str) or not _ISO_UTC_RE.match(applied_at):
+        applied_at = now_iso()
+    item = {
+        "kind": sanitize_kind(fix.get("kind")),
+        "target": fix["target"],
+        "title": _clip(fix.get("title") or "Correção aplicada", MAX_FIX_TITLE),
+        "appliedAt": applied_at,
+    }
+    if fix.get("findingKind"):
+        item["findingKind"] = sanitize_kind(fix["findingKind"])
+    return item
+
+
+def sanitize_fixes(fixes) -> list[dict]:
+    """Fixes applied in THIS run (contract: optional field, at most 50 items)."""
+    items = [_sanitize_fix(fix) for fix in (fixes or [])]
+    return [item for item in items if item][:MAX_FIXES]
+
+
 def sanitize_payload(payload: dict) -> dict:
-    """Enforce the API contract: exact keys, enums, list and string limits."""
+    """Enforce the API contract: exact keys, enums, list and string limits.
+
+    ``fixes`` is optional in the contract and is only included when the run applied a fix.
+    """
     mode = payload.get("mode")
     if mode not in VALID_MODES:
         raise ValueError(f"modo inválido: {mode!r}")
@@ -1984,7 +2440,7 @@ def sanitize_payload(payload: dict) -> dict:
         _sanitize_device(d) for d in (payload.get("devices") or [])[:MAX_DEVICES]
     ]
     findings = sort_findings([_sanitize_finding(f) for f in payload.get("findings") or []])
-    return {
+    result = {
         "agentVersion": _clip(payload.get("agentVersion") or AGENT_VERSION),
         "mode": mode,
         "startedAt": _clip(payload.get("startedAt") or now_iso()),
@@ -2000,6 +2456,10 @@ def sanitize_payload(payload: dict) -> dict:
         "devices": devices,
         "findings": findings[:MAX_FINDINGS],
     }
+    fixes = sanitize_fixes(payload.get("fixes"))
+    if fixes:
+        result["fixes"] = fixes
+    return result
 
 
 def build_payload(
@@ -2013,6 +2473,7 @@ def build_payload(
     wifi_security: str | None,
     devices: list[dict],
     findings: list[dict],
+    fixes: list[dict] | None = None,
 ) -> dict:
     return sanitize_payload({
         "agentVersion": AGENT_VERSION,
@@ -2029,6 +2490,7 @@ def build_payload(
         },
         "devices": devices,
         "findings": findings,
+        "fixes": fixes or [],
     })
 
 
@@ -2154,7 +2616,23 @@ def format_summary(payload: dict, elapsed: float | None = None) -> str:
             "Como corrigir: " + finding["recommendation"], width=78,
             initial_indent="    ", subsequent_indent="    ",
         ))
-    lines += ["", "O agente não alterou nenhuma configuração; ele apenas explica como corrigir."]
+    fixes = payload.get("fixes") or []
+    fixable = (FIXABLE_FINDING_KINDS if payload["host"]["os"] == "windows"
+               else {"firewall_disabled", "upnp_port_mapping"})
+    if fixes:
+        lines += ["", f"Correções aplicadas nesta execução, com a sua confirmação: {len(fixes)}"]
+        for fix in fixes:
+            where = "roteador" if fix["target"] == "router" else "este computador"
+            lines.append(f"  - {fix['title']} ({where})")
+        lines.append("Para desfazer: python scanner.py --desfazer")
+    elif any(f["kind"] in fixable for f in findings):
+        lines += [
+            "",
+            "O agente não alterou nenhuma configuração. Alguns achados têm correção automática: "
+            "rode com --corrigir (pede SIM antes de cada uma) ou --simular (só mostra).",
+        ]
+    else:
+        lines += ["", "O agente não alterou nenhuma configuração; ele apenas explica como corrigir."]
     return "\n".join(lines)
 
 
@@ -2185,6 +2663,875 @@ def finish(payload: dict, args: argparse.Namespace, elapsed: float | None = None
     snippet = re.sub(r"\s+", " ", body).strip()[:300]
     log(f"Resposta da API: HTTP {status}" + (f" - {snippet}" if snippet else ""))
     return EXIT_OK if 200 <= status < 300 else EXIT_UPLOAD_FAILED
+
+
+# =============================================================================
+# Fixes: one at a time, each confirmed with SIM, each recorded for undo
+# =============================================================================
+
+FIXABLE_FINDING_KINDS = frozenset({
+    "firewall_disabled", "firewall_profile_disabled", "firewall_partially_disabled",
+    "network_marked_private", "exposed_smb", "exposed_rdp", "exposed_database",
+    "exposed_dev_server", "upnp_port_mapping",
+})
+
+
+@dataclasses.dataclass
+class FixPlan:
+    kind: str                # fix kind sent to the API (e.g. firewall_enabled)
+    target: str              # computer | router
+    title: str               # what was done, pt-BR, sent to the API
+    label: str               # what will be done, shown before asking
+    finding_kind: str | None
+    problem: str
+    change: str
+    risk: str
+    undo_text: str
+    steps: list[tuple[dict, dict]]  # (do, undo) specs; commands are rebuilt from a whitelist
+    needs_admin: bool = True
+
+
+class JournalError(RuntimeError):
+    """The local fix journal cannot be read or written."""
+
+
+def is_admin(os_name: str | None = None) -> bool:
+    if (os_name or detect_os()) == "windows":
+        try:
+            import ctypes
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except (ImportError, AttributeError, OSError):
+            return False
+    geteuid = getattr(os, "geteuid", None)
+    if geteuid is None:
+        return False
+    try:
+        return geteuid() == 0
+    except OSError:
+        return False
+
+
+def admin_help(os_name: str) -> str:
+    if os_name == "windows":
+        return (
+            "As correções neste computador precisam de administrador. Feche este terminal, abra o "
+            "menu Iniciar, clique com o botão direito em 'Terminal' (ou 'Windows PowerShell'), "
+            "escolha 'Executar como administrador' e rode o mesmo comando de novo. Por enquanto, "
+            "sigo só com o que não precisa de administrador."
+        )
+    return (
+        "As correções neste computador precisam de administrador (root). Rode o mesmo comando de "
+        "novo com sudo, por exemplo: sudo python3 scanner.py --mode public --corrigir. Por "
+        "enquanto, sigo só com o que não precisa de administrador."
+    )
+
+
+# --- Journal (local file with what changed and how to undo it) ---------------
+
+def journal_path() -> str:
+    if detect_os() == "windows":
+        base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
+        return os.path.join(base, "Olharium", "fixes.json")
+    return os.path.join(os.path.expanduser("~"), ".olharium", "fixes.json")
+
+
+def load_journal(path: str) -> dict:
+    if not os.path.exists(path):
+        return {"version": JOURNAL_VERSION, "fixes": []}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError) as exc:
+        raise JournalError(f"Não foi possível ler o diário de correções ({path}): {exc}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("fixes"), list):
+        raise JournalError(f"O diário de correções ({path}) está num formato desconhecido.")
+    return data
+
+
+def save_journal(path: str, data: dict) -> None:
+    temp = path + ".tmp"
+    try:
+        os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+        with open(temp, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
+        os.replace(temp, path)
+        if os.name != "nt":
+            os.chmod(path, 0o600)
+    except OSError as exc:
+        raise JournalError(f"Não foi possível gravar o diário de correções ({path}): {exc}") from exc
+
+
+def record_fix(entry: dict) -> None:
+    path = journal_path()
+    data = load_journal(path)
+    data["version"] = JOURNAL_VERSION
+    data["fixes"].append(entry)
+    save_journal(path, data)
+
+
+# --- Exact commands (rebuilt from validated data, never read as text) ---------
+
+def _require_int(value, low: int, high: int, what: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high:
+        raise ValueError(f"{what} inválido")
+    return value
+
+
+def _powershell_change(script: str) -> list[str]:
+    return [
+        "powershell", "-NoProfile", "-NonInteractive", "-Command",
+        f"$ErrorActionPreference = 'Stop'; {script}",
+    ]
+
+
+def build_command(spec: dict) -> list[str]:
+    """Exact command of a computer fix/undo step. Raises ValueError for anything unexpected.
+
+    The journal is a user-writable file, so undo data is validated here and turned into a
+    command from this fixed list; nothing in the journal is ever executed as text.
+    """
+    if not isinstance(spec, dict):
+        raise ValueError("passo inválido")
+    action = spec.get("action")
+    if action == "firewall_set":
+        state, os_name = spec.get("state"), spec.get("os")
+        if state not in ("on", "off"):
+            raise ValueError("estado do firewall inválido")
+        if os_name == "windows":
+            profile = spec.get("profile")
+            if profile not in ("domain", "private", "public"):
+                raise ValueError("perfil do firewall inválido")
+            return ["netsh", "advfirewall", "set", f"{profile}profile", "state", state]
+        if os_name == "macos":
+            return [MACOS_SOCKETFILTERFW, "--setglobalstate", state]
+        if os_name == "linux":
+            return ["ufw", "enable" if state == "on" else "disable"]
+        raise ValueError("sistema operacional inválido")
+    if action == "network_category":
+        index = _require_int(spec.get("index"), 1, 999_999, "índice da interface")
+        category = spec.get("category")
+        if category not in ("Public", "Private"):
+            raise ValueError("categoria de rede inválida")
+        return _powershell_change(
+            f"Set-NetConnectionProfile -InterfaceIndex {index} -NetworkCategory {category}"
+        )
+    if action == "firewall_rules":
+        names, enabled = spec.get("names"), spec.get("enabled")
+        if (not isinstance(names, list) or not 1 <= len(names) <= 64
+                or not all(isinstance(name, str) and _RULE_NAME_RE.match(name) for name in names)):
+            raise ValueError("nomes de regra do firewall inválidos")
+        if not isinstance(enabled, bool):
+            raise ValueError("estado da regra inválido")
+        verb = "Enable" if enabled else "Disable"
+        return _powershell_change(f"{verb}-NetFirewallRule -Name " + ",".join(f"'{n}'" for n in names))
+    if action == "rdp_deny":
+        value = _require_int(spec.get("value"), 0, 1, "valor de fDenyTSConnections")
+        return ["reg", "add", RDP_KEY, "/v", "fDenyTSConnections", "/t", "REG_DWORD", "/d", str(value), "/f"]
+    if action == "port_block":
+        port = _require_int(spec.get("port"), 1, 65535, "porta")
+        present = spec.get("present")
+        if not isinstance(present, bool):
+            raise ValueError("operação da regra inválida")
+        name = f"{BLOCK_RULE_PREFIX}{port}"
+        if present:
+            return _powershell_change(
+                f"New-NetFirewallRule -Name '{name}' -DisplayName 'Olharium: bloqueio da porta {port}' "
+                f"-Direction Inbound -Action Block -Protocol TCP -LocalPort {port} -Profile Any | Out-Null"
+            )
+        return _powershell_change(f"Remove-NetFirewallRule -Name '{name}'")
+    raise ValueError(f"ação desconhecida: {action!r}")
+
+
+def validate_upnp_spec(spec: dict) -> dict:
+    """Validated copy of a router step (DeletePortMapping / AddPortMapping)."""
+    if not isinstance(spec, dict) or spec.get("action") not in ("upnp_delete", "upnp_add"):
+        raise ValueError("passo UPnP inválido")
+    control = spec.get("controlURL")
+    if not isinstance(control, str) or len(control) > 300:
+        raise ValueError("endereço de controle UPnP inválido")
+    try:
+        parts = urllib.parse.urlsplit(control)
+        parts.port  # noqa: B018 - raises ValueError on a bad port
+    except ValueError as exc:
+        raise ValueError("endereço de controle UPnP inválido") from exc
+    if parts.scheme != "http" or not is_rfc1918(parts.hostname):
+        raise ValueError("o endereço de controle UPnP precisa ser http:// num IP privado")
+    service_type = spec.get("serviceType")
+    if not isinstance(service_type, str) or not _WAN_SERVICE_RE.match(service_type):
+        raise ValueError("serviço UPnP inválido")
+    remote = spec.get("remoteHost") or ""
+    if not isinstance(remote, str) or (remote and not _is_ipv4(remote)):
+        raise ValueError("endereço remoto inválido")
+    protocol = spec.get("protocol")
+    if protocol not in ("TCP", "UDP"):
+        raise ValueError("protocolo inválido")
+    clean = {
+        "action": spec["action"],
+        "controlURL": control,
+        "serviceType": service_type,
+        "remoteHost": remote,
+        "externalPort": _require_int(spec.get("externalPort"), 1, 65535, "porta externa"),
+        "protocol": protocol,
+    }
+    if spec["action"] == "upnp_add":
+        client = spec.get("internalClient")
+        if not isinstance(client, str) or not is_rfc1918(client):
+            raise ValueError("endereço interno inválido")
+        enabled = spec.get("enabled")
+        description = spec.get("description") or ""
+        if not isinstance(enabled, bool) or not isinstance(description, str):
+            raise ValueError("dados do mapeamento inválidos")
+        clean.update(
+            internalPort=_require_int(spec.get("internalPort"), 1, 65535, "porta interna"),
+            internalClient=client,
+            enabled=enabled,
+            description=_printable(description, 256),
+            leaseDuration=_require_int(spec.get("leaseDuration") or 0, 0, 2**32 - 1, "duração"),
+        )
+    return clean
+
+
+def _upnp_arguments(clean: dict) -> tuple[str, list[tuple[str, str]]]:
+    arguments = [
+        ("NewRemoteHost", clean["remoteHost"]),
+        ("NewExternalPort", str(clean["externalPort"])),
+        ("NewProtocol", clean["protocol"]),
+    ]
+    if clean["action"] == "upnp_delete":
+        return "DeletePortMapping", arguments
+    return "AddPortMapping", arguments + [
+        ("NewInternalPort", str(clean["internalPort"])),
+        ("NewInternalClient", clean["internalClient"]),
+        ("NewEnabled", "1" if clean["enabled"] else "0"),
+        ("NewPortMappingDescription", clean["description"]),
+        ("NewLeaseDuration", str(clean["leaseDuration"])),
+    ]
+
+
+def format_argv(argv: list[str]) -> str:
+    if argv and argv[0] in ("netsh", "powershell", "reg"):
+        return subprocess.list2cmdline(argv)
+    return shlex.join(argv)
+
+
+def describe_spec(spec) -> str:
+    """The exact command (or SOAP action) a step runs, for display."""
+    if isinstance(spec, dict) and spec.get("action") in ("upnp_delete", "upnp_add"):
+        try:
+            clean = validate_upnp_spec(spec)
+        except ValueError:
+            return "(passo inválido: não será executado)"
+        action, arguments = _upnp_arguments(clean)
+        shown = ", ".join(
+            f"{name}='{value}'" if name in ("NewRemoteHost", "NewPortMappingDescription") else f"{name}={value}"
+            for name, value in arguments
+        )
+        return f"UPnP {action} em {clean['controlURL']} ({shown})"
+    try:
+        return format_argv(build_command(spec))
+    except ValueError:
+        return "(passo inválido: não será executado)"
+
+
+_UPNP_ERRORS = {
+    "606": "o roteador não autorizou a ação. Muitos roteadores só deixam um aparelho mexer nos "
+           "mapeamentos que ele mesmo criou: feche o programa que abriu a porta ou remova pelo "
+           "painel do roteador",
+    "714": "o mapeamento não existe mais no roteador",
+    "718": "já existe outro mapeamento nessa porta",
+    "725": "o roteador só aceita mapeamentos permanentes",
+}
+
+
+def _upnp_error_text(status: int | None, body: str) -> str:
+    if status is None:
+        return f"o roteador não respondeu ({(body or '')[:120]})"
+    code = _xml_tag(body or "", "errorCode")
+    if code in _UPNP_ERRORS:
+        return f"{_UPNP_ERRORS[code]} (erro UPnP {code})"
+    if code:
+        reason = _xml_tag(body or "", "errorDescription") or "sem descrição"
+        return f"o roteador recusou (erro UPnP {code}: {reason})"
+    return f"o roteador respondeu HTTP {status}"
+
+
+def _execute_upnp(spec: dict) -> tuple[bool, str]:
+    try:
+        clean = validate_upnp_spec(spec)
+    except ValueError as exc:
+        return False, f"passo recusado ({exc})"
+    action, arguments = _upnp_arguments(clean)
+    try:
+        status, body = upnp_soap_call(clean["controlURL"], clean["serviceType"], action, arguments)
+        if (status != 200 and action == "AddPortMapping" and clean["leaseDuration"]
+                and _xml_tag(body or "", "errorCode") == "725"):
+            arguments = [(n, "0" if n == "NewLeaseDuration" else v) for n, v in arguments]
+            status, body = upnp_soap_call(clean["controlURL"], clean["serviceType"], action, arguments)
+    except ProbeNotAuthorized as exc:
+        return False, str(exc)
+    if status == 200:
+        return True, ""
+    return False, _upnp_error_text(status, body)
+
+
+def execute_spec(spec) -> tuple[bool, str]:
+    """Runs one validated step. Returns (ok, message)."""
+    if isinstance(spec, dict) and spec.get("action") in ("upnp_delete", "upnp_add"):
+        return _execute_upnp(spec)
+    try:
+        argv = build_command(spec)
+    except ValueError as exc:
+        return False, f"passo recusado ({exc})"
+    code, output = run_change_cmd(argv)
+    if code == 0:
+        return True, output
+    snippet = re.sub(r"\s+", " ", output or "").strip()[:300]
+    return False, snippet or f"o comando terminou com código {code}"
+
+
+# --- Plans ----------------------------------------------------------------------
+
+@dataclasses.dataclass
+class PublicAudit:
+    os_name: str
+    hostname: str
+    net: NetworkInfo
+    profiles: list[dict]
+    firewall: FirewallStatus
+    fw_rules: WindowsFirewallRules
+    listeners: list[Listener] | None
+    wifi_raw: str | None
+    findings: list[dict]
+
+
+def _join_pt(items) -> str:
+    items = list(items)
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " e " + items[-1]
+
+
+_FIREWALL_RISK = (
+    "Baixo. Programas que recebem conexões de outros aparelhos (jogos em rede local, "
+    "compartilhamento, servidores de desenvolvimento) podem parar de recebê-las até você liberar "
+    "cada um."
+)
+
+
+def _plan_firewall(audit: PublicAudit, finding_kind: str) -> FixPlan | None:
+    status = audit.firewall
+    if audit.os_name == "windows":
+        off = [p for p in ("domain", "private", "public") if p in status.off_profiles]
+        if not off:
+            return None
+        where = f"{'no perfil' if len(off) == 1 else 'nos perfis'} {_join_pt(PROFILE_LABEL[p] for p in off)}"
+        return FixPlan(
+            kind="firewall_enabled", target="computer", title=f"Firewall ativado {where}",
+            label=f"Ligar o firewall do Windows {where}", finding_kind=finding_kind,
+            problem=f"O firewall do Windows está desligado {where}.",
+            change=f"Liga o firewall {where}. Perfis que já estão ligados e as regras existentes não mudam.",
+            risk=_FIREWALL_RISK,
+            undo_text=f"'python scanner.py --desfazer' desliga o firewall de novo só {where}.",
+            steps=[
+                ({"action": "firewall_set", "os": "windows", "profile": p, "state": "on"},
+                 {"action": "firewall_set", "os": "windows", "profile": p, "state": "off"})
+                for p in off
+            ],
+        )
+    if status.enabled is not False:
+        return None
+    if audit.os_name == "macos":
+        return FixPlan(
+            kind="firewall_enabled", target="computer", title="Firewall do macOS ativado",
+            label="Ligar o firewall do macOS", finding_kind=finding_kind,
+            problem="O firewall de aplicativos do macOS está desligado.",
+            change="Liga o firewall de aplicativos (o mesmo de Ajustes do Sistema > Rede > Firewall).",
+            risk=_FIREWALL_RISK,
+            undo_text="'python scanner.py --desfazer' desliga o firewall de novo.",
+            steps=[({"action": "firewall_set", "os": "macos", "state": "on"},
+                    {"action": "firewall_set", "os": "macos", "state": "off"})],
+        )
+    if audit.os_name == "linux" and status.source == "ufw":
+        return FixPlan(
+            kind="firewall_enabled", target="computer", title="Firewall ufw ativado",
+            label="Ligar o firewall ufw", finding_kind=finding_kind,
+            problem="O firewall ufw está instalado, mas inativo.",
+            change="Liga o ufw, que passa a valer também quando o computador reinicia, com a política "
+                   "padrão do ufw (bloqueia conexões de entrada).",
+            risk=_FIREWALL_RISK + " Se você acessa este computador por SSH, libere antes a porta "
+                 "(sudo ufw allow ssh) para não perder o acesso.",
+            undo_text="'python scanner.py --desfazer' desliga o ufw de novo.",
+            steps=[({"action": "firewall_set", "os": "linux", "state": "on"},
+                    {"action": "firewall_set", "os": "linux", "state": "off"})],
+        )
+    return None
+
+
+def _plan_profile(audit: PublicAudit) -> FixPlan | None:
+    private, seen = [], set()
+    for profile in audit.profiles:
+        index = profile.get("index")
+        if profile.get("category") == "private" and isinstance(index, int) and index not in seen:
+            seen.add(index)
+            private.append(profile)
+    if not private:
+        return None
+    names = _join_pt(
+        f"'{p['name']}'" if p.get("name") else f"da interface {p['index']}" for p in private
+    )
+    plural = len(private) > 1
+    return FixPlan(
+        kind="network_set_public", target="computer",
+        # The title goes to the API: never include the network name (SSID).
+        title="Redes atuais marcadas como Públicas no Windows" if plural
+        else "Rede atual marcada como Pública no Windows",
+        label=f"Marcar a rede {names} como Pública", finding_kind="network_marked_private",
+        problem=f"O Windows trata a rede {names} como Privada, perfil que libera a descoberta de rede "
+                "e o compartilhamento para os outros aparelhos conectados.",
+        change="Muda o perfil da rede para Pública (Set-NetConnectionProfile). Nesse perfil o Windows "
+               "esconde o computador dos outros aparelhos e usa as regras de firewall mais restritas.",
+        risk="Baixo. Impressoras, pastas compartilhadas e outros aparelhos desta rede podem deixar de "
+             "enxergar este computador. Na rede de casa, você pode voltar para Privada depois.",
+        undo_text="'python scanner.py --desfazer' volta a rede para Privada.",
+        steps=[
+            ({"action": "network_category", "index": p["index"], "category": "Public"},
+             {"action": "network_category", "index": p["index"], "category": "Private"})
+            for p in private
+        ],
+    )
+
+
+def _plan_smb(audit: PublicAudit) -> FixPlan | None:
+    rules = audit.fw_rules.smb_public_rules[:64]
+    if not audit.fw_rules.known or not rules:
+        return None
+    names = [rule["name"] for rule in rules]
+    shown = _join_pt(sorted({f"'{rule['displayName']}'" for rule in rules}))
+    other_profiles = any(
+        rule["profile"] is None or rule["profile"] == 0 or rule["profile"] & 3 for rule in rules
+    )
+    one = len(rules) == 1
+    return FixPlan(
+        kind="smb_public_rules_disabled", target="computer",
+        title="Compartilhamento de arquivos bloqueado no perfil Público do firewall",
+        label="Desativar o Compartilhamento de arquivos e impressoras nas redes públicas",
+        finding_kind="exposed_smb",
+        problem="O firewall libera o Compartilhamento de arquivos e impressoras (SMB, portas 445 e 139) "
+                f"em redes públicas: {len(rules)} regra(s) ativa(s) no perfil Público.",
+        change=f"Desativa {'a regra' if one else 'as regras'} de entrada do grupo 'Compartilhamento de "
+               f"arquivos e impressoras' que valem no perfil Público: {shown}. O grupo é identificado "
+               f"pelo código {SMB_RULE_GROUP}, igual em qualquer idioma do Windows. As regras não são "
+               "apagadas, só desativadas. Protege quando a rede está marcada como Pública.",
+        risk="Outros aparelhos deixam de acessar pastas e impressoras compartilhadas por este "
+             "computador nas redes públicas."
+             + (" Parte dessas regras também vale para redes Privadas ou de Domínio, então o "
+                "compartilhamento para nelas também até você desfazer." if other_profiles else ""),
+        undo_text=f"'python scanner.py --desfazer' reativa exatamente "
+                  f"{'essa regra' if one else f'essas {len(rules)} regras'}.",
+        steps=[({"action": "firewall_rules", "names": names, "enabled": False},
+                {"action": "firewall_rules", "names": names, "enabled": True})],
+    )
+
+
+def parse_reg_dword(text: str, name: str) -> int | None:
+    match = re.search(rf"\b{re.escape(name)}\s+REG_DWORD\s+0x([0-9a-fA-F]+)", text or "")
+    return int(match.group(1), 16) if match else None
+
+
+def read_rdp_deny() -> int | None:
+    out = run_cmd(["reg", "query", RDP_KEY, "/v", "fDenyTSConnections"])
+    return parse_reg_dword(out or "", "fDenyTSConnections")
+
+
+def _plan_rdp() -> FixPlan | None:
+    if read_rdp_deny() != 0:  # unknown, or RDP already off (something else uses 3389)
+        return None
+    return FixPlan(
+        kind="rdp_disabled", target="computer", title="Área de Trabalho Remota desativada",
+        label="Desligar a Área de Trabalho Remota (RDP)", finding_kind="exposed_rdp",
+        problem="A Área de Trabalho Remota do Windows está ligada e a porta 3389 aceita conexões da rede.",
+        change="Muda o valor fDenyTSConnections de 0 para 1 no registro (HKLM\\SYSTEM\\"
+               "CurrentControlSet\\Control\\Terminal Server). É o mesmo que desligar a Área de "
+               "Trabalho Remota em Configurações > Sistema.",
+        risk="Ninguém consegue mais acessar este computador por Área de Trabalho Remota (inclusive "
+             "você e o suporte de TI) até desfazer. Uma sessão remota aberta agora pode cair.",
+        undo_text="'python scanner.py --desfazer' volta o valor para 0 (Área de Trabalho Remota ligada).",
+        steps=[({"action": "rdp_deny", "value": 1}, {"action": "rdp_deny", "value": 0})],
+    )
+
+
+def _plan_port_blocks(audit: PublicAudit) -> list[FixPlan]:
+    plans, seen = [], set()
+    for finding in audit.findings:
+        port = finding.get("port")
+        if finding.get("kind") not in ("exposed_database", "exposed_dev_server") or not port:
+            continue
+        if port in seen or port in audit.fw_rules.blocked_ports:
+            continue
+        seen.add(port)
+        subject = PUBLIC_PORT_RULES[port][2] if port in PUBLIC_PORT_RULES else f"Serviço na porta {port}"
+        rule = f"{BLOCK_RULE_PREFIX}{port}"
+        plans.append(FixPlan(
+            kind="port_blocked", target="computer",
+            title=f"Porta {port} bloqueada no firewall ({subject})",
+            label=f"Bloquear a porta {port} no firewall ({subject})", finding_kind=finding["kind"],
+            problem=f"{subject} aceita conexões de outros aparelhos da rede na porta {port}/TCP.",
+            change=f"Cria a regra de entrada 'Olharium: bloqueio da porta {port}' (nome interno {rule}), "
+                   f"que bloqueia conexões TCP de outros aparelhos na porta {port} em todos os perfis de "
+                   "rede. O programa continua funcionando neste computador (localhost). A regra só "
+                   "vale com o firewall ligado.",
+            risk="Outros aparelhos (seu celular, colegas na mesma rede, máquinas virtuais) deixam de "
+                 "acessar esse serviço até você desfazer. O programa não é fechado.",
+            undo_text=f"'python scanner.py --desfazer' apaga a regra {rule}.",
+            steps=[({"action": "port_block", "port": port, "present": True},
+                    {"action": "port_block", "port": port, "present": False})],
+        ))
+    return plans
+
+
+def plan_computer_fixes(audit: PublicAudit) -> list[FixPlan]:
+    """Safe fixes for THIS computer, in a sensible order. Only reads the system."""
+    kinds = {finding.get("kind") for finding in audit.findings}
+    plans: list[FixPlan | None] = []
+    firewall_kind = next(
+        (k for k in ("firewall_disabled", "firewall_partially_disabled", "firewall_profile_disabled")
+         if k in kinds), None,
+    )
+    if firewall_kind:
+        plans.append(_plan_firewall(audit, firewall_kind))
+    if audit.os_name == "windows":
+        if "network_marked_private" in kinds:
+            plans.append(_plan_profile(audit))
+        if "exposed_smb" in kinds:
+            plans.append(_plan_smb(audit))
+        if "exposed_rdp" in kinds:
+            plans.append(_plan_rdp())
+        plans.extend(_plan_port_blocks(audit))
+    return [plan for plan in plans if plan]
+
+
+def plan_router_fixes(mappings: list[dict]) -> list[FixPlan]:
+    """One fix per UPnP mapping of the user's own router (most sensitive first)."""
+    plans = []
+    for mapping in sorted(mappings, key=lambda m: 0 if upnp_mapping_is_sensitive(m) else 1):
+        base = {key: mapping[key] for key in
+                ("controlURL", "serviceType", "remoteHost", "externalPort", "protocol")}
+        delete = {"action": "upnp_delete", **base}
+        add = {"action": "upnp_add", **base, **{key: mapping[key] for key in
+               ("internalPort", "internalClient", "enabled", "description", "leaseDuration")}}
+        try:
+            validate_upnp_spec(delete)
+            validate_upnp_spec(add)
+        except ValueError:
+            continue
+        external, protocol, router = mapping["externalPort"], mapping["protocol"], mapping["routerIp"]
+        described = f" ('{mapping['description'][:60]}')" if mapping.get("description") else ""
+        plans.append(FixPlan(
+            kind="upnp_mapping_removed", target="router",
+            title=f"Porta {external}/{protocol} fechada no roteador (mapeamento UPnP removido)",
+            label=f"Fechar a porta {external}/{protocol} aberta pelo UPnP no roteador {router}",
+            finding_kind="upnp_port_mapping",
+            problem=f"O roteador {router} encaminha a porta externa {external}/{protocol} da Internet para "
+                    f"{mapping['internalClient']}:{mapping['internalPort']}{described}."
+                    + (" É uma porta muito visada por ataques." if upnp_mapping_is_sensitive(mapping) else ""),
+            change="Remove só esse mapeamento do roteador, com a ação UPnP DeletePortMapping. Nenhuma "
+                   "outra configuração do roteador muda, e o agente não faz login nem usa senha.",
+            risk="O programa ou aparelho que pediu a abertura (console, jogo, câmera, torrent, acesso "
+                 "remoto) pode deixar de receber conexões da Internet. Com o UPnP ligado, ele pode "
+                 "abrir a porta de novo: para impedir, desative o UPnP no painel do roteador.",
+            undo_text="'python scanner.py --desfazer', conectado a esta mesma rede, recria o mapeamento "
+                      "igual (ação UPnP AddPortMapping).",
+            steps=[(delete, add)],
+            needs_admin=False,
+        ))
+    return plans
+
+
+# --- Interaction ------------------------------------------------------------------
+
+def ask_line(prompt: str) -> str | None:
+    """Prompt on stderr (stdout may carry JSON). None when the input was closed."""
+    sys.stderr.write(prompt)
+    sys.stderr.flush()
+    try:
+        return input()
+    except EOFError:
+        return None
+
+
+def _wrap_field(label: str, text: str) -> list[str]:
+    return textwrap.wrap(f"{label}: {text}", width=78, initial_indent=" ", subsequent_indent="   ")
+
+
+def format_plan(plan: FixPlan, index: int, total: int) -> str:
+    where = "este computador" if plan.target == "computer" else "o seu roteador (UPnP)"
+    lines = [
+        "",
+        "-" * 66,
+        f" Correção {index} de {total}: {plan.label}",
+        f" Onde: {where}" + (" | precisa de administrador" if plan.needs_admin else ""),
+        "-" * 66,
+    ]
+    lines += _wrap_field("Problema", plan.problem)
+    lines += _wrap_field("O que muda", plan.change)
+    lines.append(" Comando exato:")
+    lines += [f"   {describe_spec(do)}" for do, _undo in plan.steps]
+    lines += _wrap_field("Risco", plan.risk)
+    lines += _wrap_field("Como desfazer", plan.undo_text)
+    lines.append(" Comando que desfaz:")
+    lines += [f"   {describe_spec(undo)}" for _do, undo in reversed(plan.steps)]
+    return "\n".join(lines)
+
+
+def show_simulation(plans: list[FixPlan]) -> None:
+    if not plans:
+        log("\n--simular: nenhum achado tem correção automática disponível neste sistema. Siga as "
+            "recomendações de cada achado.")
+        return
+    log(f"\n--simular: {len(plans)} correção(ões) que o --corrigir ofereceria, uma por vez. "
+        "NADA foi aplicado.")
+    for index, plan in enumerate(plans, 1):
+        log(format_plan(plan, index, len(plans)))
+    if any(plan.needs_admin for plan in plans):
+        log("\nAs correções neste computador precisam de terminal aberto como administrador.")
+
+
+def _new_fix_id() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + os.urandom(3).hex()
+
+
+def _journal_entry(plan: FixPlan, os_name: str, hostname: str, applied_at: str,
+                   undo_specs: list[dict], partial: bool = False) -> dict:
+    return {
+        "id": _new_fix_id(),
+        "kind": plan.kind,
+        "target": plan.target,
+        "title": plan.title + (" (parcial)" if partial else ""),
+        "findingKind": plan.finding_kind,
+        "appliedAt": applied_at,
+        "os": os_name,
+        "hostname": hostname,
+        "changed": plan.change,
+        "commands": [describe_spec(do) for do, _undo in plan.steps],
+        "undo": undo_specs,  # run newest step first
+        "undoneAt": None,
+    }
+
+
+def apply_plan(plan: FixPlan, os_name: str, hostname: str) -> dict | None:
+    """Applies one confirmed plan. Returns the API ``fixes`` item, or None if it failed."""
+    applied_at = now_iso()
+    done: list[dict] = []
+    log("  Aplicando (pode levar até um minuto)...")
+    for do_spec, undo_spec in plan.steps:
+        ok, message = execute_spec(do_spec)
+        if ok:
+            done.append(undo_spec)
+            continue
+        log(f"  Falhou: {message}")
+        leftover = [spec for spec in reversed(done) if not execute_spec(spec)[0]]
+        if not leftover:
+            log("  Nada ficou alterado." if not done else "  As etapas já feitas foram desfeitas; nada ficou alterado.")
+            return None
+        leftover.reverse()
+        log("  Atenção: parte da correção ficou aplicada e não pôde ser revertida agora.")
+        try:
+            record_fix(_journal_entry(plan, os_name, hostname, applied_at, leftover, partial=True))
+            log("  Ela foi registrada no diário: use 'python scanner.py --desfazer'.")
+        except JournalError as exc:
+            log(f"  {exc} Para desfazer manualmente: "
+                + " ; ".join(describe_spec(spec) for spec in reversed(leftover)))
+        return None
+    try:
+        record_fix(_journal_entry(plan, os_name, hostname, applied_at, done))
+        log(f"  Aplicada e registrada no diário ({journal_path()}). Para desfazer: python scanner.py --desfazer")
+    except JournalError as exc:
+        log(f"  Aplicada, mas {exc} Para desfazer manualmente: "
+            + " ; ".join(describe_spec(spec) for spec in reversed(done)))
+    return {
+        "kind": plan.kind,
+        "target": plan.target,
+        "title": plan.title,
+        "appliedAt": applied_at,
+        "findingKind": plan.finding_kind,
+    }
+
+
+def run_fix_flow(plans: list[FixPlan], os_name: str, hostname: str) -> list[dict]:
+    """Offers each plan, one at a time; applies only after the user types SIM.
+
+    There is deliberately no way to apply everything at once.
+    """
+    if not plans:
+        log("\nNenhum achado tem correção automática segura neste sistema. Siga as recomendações "
+            "de cada achado.")
+        return []
+    if not _stdin_is_interactive():
+        log("\n--corrigir precisa de um terminal interativo: cada correção só é aplicada depois que "
+            "você digita SIM. Nada foi alterado.")
+        show_simulation(plans)
+        return []
+    try:
+        load_journal(journal_path())
+    except JournalError as exc:
+        log(f"\n{exc} Sem o diário não dá para guardar o 'desfazer', então nenhuma correção será aplicada.")
+        return []
+    admin = is_admin(os_name) if any(plan.needs_admin for plan in plans) else True
+    if not admin:
+        log("\n" + admin_help(os_name))
+    log(f"\n{len(plans)} correção(ões) disponível(is). Cada uma só é aplicada se você digitar SIM.")
+    applied: list[dict] = []
+    for index, plan in enumerate(plans, 1):
+        log(format_plan(plan, index, len(plans)))
+        if plan.needs_admin and not admin:
+            log("  Pulada: precisa de administrador (veja acima como abrir o terminal como administrador).")
+            continue
+        answer = ask_line("Aplicar esta correção? Digite SIM: ")
+        if answer is None:
+            log("\nEntrada encerrada: as correções restantes não foram aplicadas.")
+            break
+        if answer.strip().upper() != "SIM":
+            log("  Não aplicada.")
+            continue
+        fix = apply_plan(plan, os_name, hostname)
+        if fix:
+            applied.append(fix)
+    return applied
+
+
+# --- Undo -----------------------------------------------------------------------
+
+def _format_when(value) -> str:
+    try:
+        moment = _dt.datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return str(value)
+    return moment.strftime("%d/%m/%Y %H:%M UTC")
+
+
+def _router_undo_scope(specs: list) -> ipaddress.IPv4Network | None:
+    """The current home network, if it is private and contains the router of the fix."""
+    net = detect_network(detect_os())
+    allowed, reason = check_home_network_allowed(net.local_ip)
+    scope = compute_scan_network(net.local_ip, net.prefix) if allowed else None
+    if scope is None:
+        log(f"  Não dá para falar com o roteador agora: {reason or 'rede não permitida.'}")
+        return None
+    for spec in specs:
+        control = spec.get("controlURL") if isinstance(spec, dict) else None
+        allowed = location_allowed(control, scope) if isinstance(control, str) else None
+        if not allowed or (net.gateway and allowed[0] != net.gateway):
+            log(f"  O roteador desta correção não está na rede atual ({scope}). Conecte-se à mesma "
+                "rede de casa e tente de novo.")
+            return None
+    return scope
+
+
+def undo_entry(entry: dict) -> bool:
+    title = entry.get("title") or entry.get("kind") or "correção"
+    specs = entry.get("undo")
+    if not isinstance(specs, list) or not specs:
+        log(f"  '{title}': o diário não tem dados para desfazer.")
+        return False
+    if entry.get("os") and entry.get("os") != detect_os():
+        log(f"  '{title}' foi feita em outro sistema operacional; nada foi alterado.")
+        return False
+    pending = list(specs)
+    scope = None
+    if entry.get("target") == "router":
+        scope = _router_undo_scope(specs)
+        if scope is None:
+            return False
+        _authorize_probes(scope)
+    try:
+        while pending:
+            ok, message = execute_spec(pending[-1])
+            if not ok:
+                log(f"  Falhou ao desfazer '{title}': {message}")
+                break
+            pending.pop()
+    finally:
+        if scope is not None:
+            _revoke_probes()
+    if pending:
+        entry["undo"] = pending  # only what is still applied
+        return False
+    entry["undoneAt"] = now_iso()
+    log(f"  Desfeita: {title}")
+    return True
+
+
+def run_undo(args: argparse.Namespace) -> int:
+    path = journal_path()
+    try:
+        journal = load_journal(path)
+    except JournalError as exc:
+        log(str(exc))
+        return EXIT_REFUSED
+    active = [e for e in journal["fixes"] if isinstance(e, dict) and not e.get("undoneAt")]
+    if not active:
+        log(f"Nenhuma correção para desfazer (diário: {path}).")
+        return EXIT_OK
+    active.reverse()  # newest first
+    lines = [f"Correções aplicadas pelo agente (diário: {path}):"]
+    for number, entry in enumerate(active, 1):
+        where = "roteador" if entry.get("target") == "router" else "este computador"
+        lines.append(f"  {number}. {_format_when(entry.get('appliedAt'))} - {entry.get('title')} ({where})")
+    log("\n".join(lines))
+    if args.simular:
+        for number, entry in enumerate(active, 1):
+            specs = entry.get("undo") if isinstance(entry.get("undo"), list) else []
+            log(f"\n  {number}. Para desfazer, o agente rodaria:")
+            for spec in reversed(specs):
+                log(f"     {describe_spec(spec)}")
+        log("\n--simular: nada foi desfeito.")
+        return EXIT_OK
+    if not _stdin_is_interactive():
+        log("--desfazer precisa de um terminal interativo: cada ação pede confirmação. Nada foi desfeito.")
+        return EXIT_REFUSED
+    answer = ask_line(
+        "Digite o número da correção que quer desfazer, TODAS para desfazer todas, ou Enter para sair: "
+    )
+    choice = (answer or "").strip().upper()
+    if not choice:
+        log("Nada foi desfeito.")
+        return EXIT_OK
+    if choice == "TODAS":
+        selected = active
+    elif choice.isdigit() and 1 <= int(choice) <= len(active):
+        selected = [active[int(choice) - 1]]
+    else:
+        log("Opção inválida. Nada foi desfeito.")
+        return EXIT_REFUSED
+    for entry in selected:
+        specs = entry.get("undo") if isinstance(entry.get("undo"), list) else []
+        log(f"\nDesfazer: {entry.get('title')}")
+        for spec in reversed(specs):
+            log(f"   {describe_spec(spec)}")
+    prompt = ("Desfazer esta correção? Digite SIM: " if len(selected) == 1
+              else f"Desfazer estas {len(selected)} correções? Digite SIM: ")
+    confirmation = ask_line(prompt)
+    if confirmation is None or confirmation.strip().upper() != "SIM":
+        log("Nada foi desfeito.")
+        return EXIT_REFUSED
+    os_name = detect_os()
+    admin = is_admin(os_name) if any(e.get("target") != "router" for e in selected) else True
+    if not admin:
+        log(admin_help(os_name))
+    failures = 0
+    for entry in selected:
+        if entry.get("target") != "router" and not admin:
+            log(f"  Pulada (precisa de administrador): {entry.get('title')}")
+            failures += 1
+            continue
+        if not undo_entry(entry):
+            failures += 1
+        try:
+            save_journal(path, journal)
+        except JournalError as exc:
+            log(f"  {exc}")
+            failures += 1
+    return EXIT_OK if failures == 0 else EXIT_FIX_FAILED
 
 
 # =============================================================================
@@ -2221,7 +3568,7 @@ def obtain_consent(flag: bool) -> bool:
     return answer.strip().upper() == "SIM"
 
 
-def _print_home_banner(net: NetworkInfo, scan_net: ipaddress.IPv4Network) -> None:
+def _print_home_banner(net: NetworkInfo, scan_net: ipaddress.IPv4Network, fixing: bool = False) -> None:
     host_count = max(scan_net.num_addresses - 2, 1)
     lines = [
         "=" * 66,
@@ -2233,8 +3580,17 @@ def _print_home_banner(net: NetworkInfo, scan_net: ipaddress.IPv4Network) -> Non
         f" Gateway (roteador)  : {net.gateway or 'desconhecido'}",
         "",
         f" O que será feito: teste de conexão TCP em {len(HOME_PORTS)} portas comuns, leitura",
-        " passiva de banners, um único GET / em portas HTTP e descoberta UPnP (SSDP).",
-        " Nenhuma senha é testada e nada é alterado nos aparelhos.",
+        " passiva de banners, um único GET / em portas HTTP, descoberta UPnP (SSDP) e",
+        " leitura das portas que o roteador abriu pelo UPnP. Nenhuma senha é testada.",
+    ]
+    if fixing:
+        lines += [
+            " Com --corrigir: depois da análise, o agente pode propor fechar no SEU roteador",
+            " portas abertas pelo UPnP, uma por vez, e só fecha se você digitar SIM.",
+        ]
+    else:
+        lines.append(" Nada é alterado nos aparelhos.")
+    lines += [
         "",
         " ATENÇÃO: analise apenas redes que são SUAS ou para as quais você tem",
         " autorização por escrito do responsável. Analisar redes de terceiros pode",
@@ -2265,13 +3621,16 @@ def run_home(args: argparse.Namespace) -> int:
         )
         return EXIT_REFUSED
 
-    _print_home_banner(net, scan_net)
+    fixing = args.corrigir and not args.simular
+    _print_home_banner(net, scan_net, fixing)
     if not obtain_consent(args.confirmo_rede_propria):
         log("Consentimento não confirmado. Análise cancelada: nenhum pacote foi enviado para a rede.")
         return EXIT_REFUSED
 
     hosts = [str(h) for h in scan_net.hosts()]
     deadline = time.monotonic() + GLOBAL_TIME_CAP  # counted from consent, not from the prompt
+    services: list[dict] = []
+    mappings: list[dict] = []
     _authorize_probes(scan_net)
     try:
         log(f"Testando {len(HOME_PORTS)} portas TCP em {len(hosts)} endereços (até {MAX_THREADS} conexões simultâneas)...")
@@ -2286,6 +3645,12 @@ def run_home(args: argparse.Namespace) -> int:
             descriptions = fetch_descriptions(ssdp, scan_net, deadline)
         else:
             log("Tempo máximo atingido: descoberta UPnP pulada.")
+        services = igd_services(descriptions, scan_net, net.gateway)
+        if services and time.monotonic() < deadline:
+            log("Lendo as portas que o roteador abriu pelo UPnP (GetGenericPortMappingEntry)...")
+            mappings = list_all_port_mappings(services, deadline)
+        elif services:
+            log("Tempo máximo atingido: leitura das portas abertas pelo UPnP pulada.")
     finally:
         _revoke_probes()
 
@@ -2294,28 +3659,43 @@ def run_home(args: argparse.Namespace) -> int:
     devices = assemble_devices(
         scan_net, net.local_ip, net.gateway, hostname, open_map, alive, enrichment, ssdp, descriptions, arp
     )
-    findings = build_home_findings(devices)
+    base_findings = build_home_findings(devices)
     for extra in (build_wifi_finding(wifi_raw, "home"), detect_arp_spoofing(arp, net.gateway)):
         if extra:
-            findings.append(extra)
+            base_findings.append(extra)
+
+    plans = plan_router_fixes(mappings) if (args.corrigir or args.simular) else []
+    applied: list[dict] = []
+    if fixing:
+        _authorize_probes(scan_net)  # same consented network, own router only
+        try:
+            applied = run_fix_flow(plans, os_name, hostname)
+            if applied:
+                log("Conferindo de novo as portas abertas pelo UPnP no roteador...")
+                mappings = list_all_port_mappings(services, time.monotonic() + UPNP_RELIST_CAP)
+        finally:
+            _revoke_probes()
+        if not plans:
+            log("Para corrigir este computador (firewall, compartilhamento etc.), use --mode public --corrigir.")
+
+    findings = base_findings + build_upnp_mapping_findings(mappings)
     payload = build_payload(
         "home", started_at, os_name, hostname, net.local_ip, str(scan_net), net.gateway,
-        wifi_security_label(wifi_raw), [d.to_payload() for d in devices], findings,
+        wifi_security_label(wifi_raw), [d.to_payload() for d in devices], findings, applied,
     )
-    return finish(payload, args, time.monotonic() - started)
+    code = finish(payload, args, time.monotonic() - started)
+    if args.simular:
+        show_simulation(plans)
+    return code
 
 
-def run_public(args: argparse.Namespace) -> int:
-    """Audits only this computer. Sends no packet to any other host."""
-    started_at = now_iso()
-    started = time.monotonic()
-    os_name = detect_os()
-    hostname = get_hostname()
-    log("Modo público: verificando apenas este computador (nenhum pacote é enviado para outros aparelhos).")
+def audit_public(os_name: str, hostname: str) -> PublicAudit:
+    """Local read-only checks of this computer. Sends no packet to any other host."""
     net = detect_network(os_name)
     profiles = get_connection_profiles(os_name)
     active = {p["category"] for p in profiles if p.get("category")}
     firewall = get_firewall_status(os_name, active)
+    fw_rules = get_windows_firewall_rules(os_name)
     listeners = get_listening_ports(os_name)
     wifi_raw = get_wifi_security(os_name)
     arp = read_arp_table(os_name)
@@ -2330,7 +3710,8 @@ def run_public(args: argparse.Namespace) -> int:
             "Rode o agente com um usuário que tenha acesso a netstat/ss/lsof.",
         ))
     else:
-        findings += build_listener_findings(listeners, firewall.enabled)
+        blocked = compute_blocked_ports(firewall, fw_rules, active)
+        findings += build_listener_findings(listeners, firewall.enabled, blocked)
     for extra in (
         build_wifi_finding(wifi_raw, "public"),
         build_hostname_finding(hostname),
@@ -2339,12 +3720,35 @@ def run_public(args: argparse.Namespace) -> int:
         if extra:
             findings.append(extra)
     findings += build_ip_findings(net.local_ip)
+    return PublicAudit(os_name, hostname, net, profiles, firewall, fw_rules, listeners, wifi_raw, findings)
 
+
+def run_public(args: argparse.Namespace) -> int:
+    """Audits only this computer. Sends no packet to any other host."""
+    started_at = now_iso()
+    started = time.monotonic()
+    os_name = detect_os()
+    hostname = get_hostname()
+    log("Modo público: verificando apenas este computador (nenhum pacote é enviado para outros aparelhos).")
+    audit = audit_public(os_name, hostname)
+
+    plans = plan_computer_fixes(audit) if (args.corrigir or args.simular) else []
+    applied: list[dict] = []
+    if args.corrigir and not args.simular:
+        applied = run_fix_flow(plans, os_name, hostname)
+        if applied:
+            log("Refazendo a auditoria para conferir o resultado das correções...")
+            audit = audit_public(os_name, hostname)
+
+    net = audit.net
     payload = build_payload(
         "public", started_at, os_name, hostname, net.local_ip, net.cidr, net.gateway,
-        wifi_security_label(wifi_raw), [], findings,
+        wifi_security_label(audit.wifi_raw), [], audit.findings, applied,
     )
-    return finish(payload, args, time.monotonic() - started)
+    code = finish(payload, args, time.monotonic() - started)
+    if args.simular:
+        show_simulation(plans)
+    return code
 
 
 # =============================================================================
@@ -2354,15 +3758,25 @@ def run_public(args: argparse.Namespace) -> int:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="scanner.py",
+        allow_abbrev=False,  # consent and fix flags must be typed in full
         description=(
             "Radar360 - agente local de auditoria de rede. Modo 'home' analisa a SUA rede "
             "doméstica (exige consentimento); modo 'public' verifica só este computador."
         ),
     )
-    parser.add_argument("--mode", choices=VALID_MODES, required=True,
+    parser.add_argument("--mode", choices=VALID_MODES,
                         help="home = rede de casa (com consentimento); public = só este computador")
     parser.add_argument("--confirmo-rede-propria", dest="confirmo_rede_propria", action="store_true",
                         help="confirma, sem pergunta interativa, que a rede é sua ou que você tem autorização")
+    # Deliberately there is no flag to apply every fix at once: each one asks for SIM.
+    parser.add_argument("--corrigir", action="store_true",
+                        help="depois da auditoria, oferece correções seguras uma a uma; cada uma só é "
+                             "aplicada se você digitar SIM")
+    parser.add_argument("--simular", action="store_true",
+                        help="mostra as correções que seriam feitas, sem aplicar nada")
+    parser.add_argument("--desfazer", action="store_true",
+                        help="lista as correções feitas pelo agente e desfaz a escolhida (ou todas), "
+                             "com confirmação")
     parser.add_argument("--api", help="URL base da API do Radar360 (https://...)")
     parser.add_argument("--token", help=f"token de pareamento (ou variável de ambiente {TOKEN_ENV_VAR})")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true",
@@ -2385,6 +3799,17 @@ def main(argv: list[str] | None = None) -> int:
     _configure_streams()
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+    if args.desfazer:
+        if args.corrigir:
+            parser.error("--desfazer não pode ser usado junto com --corrigir.")
+        try:
+            return run_undo(args)
+        except KeyboardInterrupt:
+            _revoke_probes()
+            log("Interrompido pelo usuário.")
+            return 130
+    if not args.mode:
+        parser.error("informe --mode home ou --mode public (ou use --desfazer).")
     if args.api:
         try:
             args.api = validate_api_url(args.api)

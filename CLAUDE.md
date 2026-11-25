@@ -43,7 +43,7 @@ Estas regras vêm do regulamento (itens 5.2, 6.8, 6.9 e 7.4) e da segurança do 
    - Só roda em RFC1918 (10/8, 172.16/12, 192.168/16) e no máximo um /24; recusa CGNAT, IP público e loopback.
    - Nunca tenta login, senha padrão, força bruta ou exploit.
    - O modo rede pública não envia nenhum pacote a outro aparelho.
-   - O agente nunca altera configurações do sistema.
+   - **Correções só com consentimento, a cada ação.** O agente pode corrigir o **próprio computador** (firewall, perfil de rede, compartilhamento de arquivos, Área de Trabalho Remota, bloqueio de porta no firewall) e remover mapeamentos UPnP do **próprio roteador**. Antes de cada correção ele mostra o que vai mudar e como desfazer, pede confirmação explícita e grava o "desfazer". Não existe modo de aplicar tudo de uma vez. Nunca faz login no roteador, nunca pede senha e nunca altera outro aparelho.
 2. **Só ativos verificados do próprio usuário.** O e-mail é confirmado por link, e o CPF fica preso a uma única conta. A interface mostra fonte, data e categorias expostas, **nunca o dado vazado**. Isso existe para evitar doxxing, e o regulamento considera o "uso previsível" da ferramenta.
 3. **Nenhum dado real de terceiros.** A base de vazamentos é sintética, e incidentes reais entram só como metadados. Testes ao vivo apenas com dados da própria dupla.
 4. **Identificadores com HMAC-SHA256** (`HMAC_SECRET`, fora do banco), nunca com hash simples: CPF e telefone têm espaço pequeno e caem por força bruta. Dados que precisam ser lidos de volta usam AES-256-GCM. Não diga "zero-knowledge" em lugar nenhum: não é verdade para este produto.
