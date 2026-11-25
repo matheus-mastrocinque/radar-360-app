@@ -1,6 +1,6 @@
 # Estado do projeto: Radar360
 
-Atualizado em 24/11/2026, depois do deploy em produção.
+Atualizado em 25/11/2026, depois do deploy da central de comando.
 
 **Demo no ar:** [radar360-web.vercel.app](https://radar360-web.vercel.app) (API: [radar360-api-hazel.vercel.app/health](https://radar360-api-hazel.vercel.app/health)).
 
@@ -19,8 +19,9 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
 | `f9d6d7a` | Agente corrige com consentimento a cada ação (`--corrigir`, `--simular`, `--desfazer`) |
 | `0852af8` | Vazamentos reais (catálogo HIBP), Minhas contas e "a empresa me avisou" |
 | `f401e64` | Marca Olharium (HUD Neon), design system e telas refeitas |
+| `4488f6d` | Painel vira central de comando: tudo numa tela, mapa de exposição e gaveta de detalhes |
 
-A produção roda o código do `f401e64`, publicado na noite de 25/11, com as duas migrações novas aplicadas no Neon e o catálogo de vazamentos reais importado (872 vazamentos). Todos os roteiros de verificação passaram no endereço público.
+A produção roda o código do `4488f6d`: o site foi publicado de novo em 25/11 à tarde com a central de comando. A API segue no `f401e64`, que não mudou, com as duas migrações aplicadas no Neon e o catálogo de vazamentos reais importado (872 vazamentos). Todos os roteiros de verificação passaram no endereço público, incluindo o roteiro novo da gaveta (26 checagens).
 
 ## Prazos
 
