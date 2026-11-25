@@ -2,15 +2,23 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/*
+ * Design system do Olharium · identidade "HUD Neon" (docs/design-system.md).
+ * Tema escuro por padrão: obsidiana, grafite e névoa; carmesim só na marca e no botão principal;
+ * Neon Rubi para texto vermelho; Ciano Telemetria como acento raro. Estados (sucesso, atenção,
+ * perigo) NUNCA usam o carmesim da marca.
+ */
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --font-display: var(--font-instrument-serif);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+  --font-heading: var(--font-plex-sans);
+  /* Michroma: só títulos curtos em caixa alta e rótulos de marca. */
+  --font-display: var(--font-michroma);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -40,12 +48,22 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  /* Identidade do Radar360: tinta azul-marinho + sinal ciano do radar. */
+  /* Marca */
+  --color-crimson: var(--crimson);
+  --color-crimson-deep: var(--crimson-deep);
+  --color-rubi: var(--rubi);
+  --color-telemetry: var(--telemetry);
   --color-ink: var(--ink);
   --color-ink-foreground: var(--ink-foreground);
   --color-ink-muted: var(--ink-muted);
+  /* Compatibilidade: "brand" é o texto vermelho legível (Neon Rubi); "signal" é a luz do HUD. */
   --color-brand: var(--brand);
   --color-signal: var(--signal);
+  /* Estados */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -58,8 +76,16 @@
 @theme {
   --animate-radar-sweep: radar-sweep 7s linear infinite;
   --animate-blip: blip 2.8s ease-out infinite;
+  --animate-orbit: orbit 30s linear infinite;
+  --animate-hud-pulse: hud-pulse 3.2s ease-in-out infinite;
 
   @keyframes radar-sweep {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes orbit {
     to {
       transform: rotate(360deg);
     }
@@ -75,112 +101,152 @@
       opacity: 0;
     }
   }
+
+  @keyframes hud-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
 }
 
 :root {
-  --background: oklch(0.983 0.004 255);
-  --foreground: oklch(0.2 0.03 262);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.03 262);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.03 262);
-  --primary: oklch(0.25 0.045 263);
-  --primary-foreground: oklch(0.985 0.003 255);
-  --secondary: oklch(0.955 0.008 255);
-  --secondary-foreground: oklch(0.25 0.045 263);
-  --muted: oklch(0.958 0.007 255);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.955 0.025 200);
-  --accent-foreground: oklch(0.36 0.07 210);
-  --destructive: oklch(0.577 0.215 27.325);
-  --border: oklch(0.915 0.008 255);
-  --input: oklch(0.88 0.01 255);
-  --ring: oklch(0.6 0.11 205);
-  --ink: oklch(0.185 0.035 262);
-  --ink-foreground: oklch(0.97 0.006 255);
-  --ink-muted: oklch(0.72 0.025 258);
-  --brand: oklch(0.5 0.1 210);
-  --signal: oklch(0.86 0.13 188);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  color-scheme: dark;
+
+  /* Superfícies e texto */
+  --background: #07060a; /* Obsidiana */
+  --foreground: #f4f1f3; /* Névoa */
+  --card: #15111a; /* Grafite */
+  --card-foreground: #f4f1f3;
+  --popover: #15111a;
+  --popover-foreground: #f4f1f3;
+  --muted: #1d1823; /* superfície elevada */
+  --muted-foreground: #a69daa; /* Cinza Sinal: 7,1:1 sobre o grafite */
+  --secondary: #1d1823;
+  --secondary-foreground: #f4f1f3;
+  --accent: #1d1823;
+  --accent-foreground: #f4f1f3;
+  --border: #2a2430;
+  --input: #2f2836;
+  --ring: #4fd9e6; /* foco de teclado: Ciano Telemetria */
+
+  /* Marca */
+  --primary: #e3123c; /* Carmesim Vigília: botão principal (texto branco 4,75:1) */
+  --primary-foreground: #ffffff;
+  --crimson: #e3123c;
+  --crimson-deep: #7a0820;
+  --rubi: #ff3b5c; /* Neon Rubi: texto vermelho sobre o escuro (5,4:1 no grafite) */
+  --telemetry: #4fd9e6;
+  --ink: #0e0b12; /* bloco mais escuro que o cartão (chips, ícones, código) */
+  --ink-foreground: #f4f1f3;
+  --ink-muted: #a69daa;
+  --brand: #ff3b5c;
+  --signal: #ff3b5c;
+
+  /* Estados: verde → âmbar → laranja. O carmesim nunca indica estado. */
+  --success: #2fd38a;
+  --warning: #f5b83d;
+  --danger: #ff6b2c; /* Laranja Falha */
+  --info: #4fd9e6;
+  --destructive: #ff6b2c;
+
+  --chart-1: #ff3b5c;
+  --chart-2: #4fd9e6;
+  --chart-3: #f5b83d;
+  --chart-4: #2fd38a;
+  --chart-5: #a69daa;
+  --radius: 0.75rem;
+  --sidebar: #15111a;
+  --sidebar-foreground: #f4f1f3;
+  --sidebar-primary: #e3123c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1d1823;
+  --sidebar-accent-foreground: #f4f1f3;
+  --sidebar-border: #2a2430;
+  --sidebar-ring: #4fd9e6;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
-
-/* Malha fina usada nos fundos escuros (hero da landing e card do score). */
+/* Malha fina de instrumento, para fundos de destaque (hero, score). */
 @utility bg-grid {
   background-image:
-    linear-gradient(to right, oklch(1 0 0 / 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, oklch(1 0 0 / 0.06) 1px, transparent 1px);
+    linear-gradient(to right, rgb(244 241 243 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(244 241 243 / 0.045) 1px, transparent 1px);
   background-size: 44px 44px;
 }
 
-/* Rótulo técnico em caixa alta (mono), usado como "eyebrow" das seções. */
+/* Rótulo técnico (Plex Mono, caixa alta), usado como "eyebrow" das seções. */
 @utility eyebrow {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   line-height: 1rem;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+/* Título de marca: Michroma em caixa alta, só para textos curtos. */
+@utility display-title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+}
+
+/* Cantos de mira em volta de um bloco (HUD em dose baixa). Cor: --hud-color. */
+@utility hud-corners {
+  --hud-color: var(--rubi);
+  --hud-len: 14px;
+  background-image:
+    linear-gradient(var(--hud-color), var(--hud-color)), linear-gradient(var(--hud-color), var(--hud-color)),
+    linear-gradient(var(--hud-color), var(--hud-color)), linear-gradient(var(--hud-color), var(--hud-color)),
+    linear-gradient(var(--hud-color), var(--hud-color)), linear-gradient(var(--hud-color), var(--hud-color)),
+    linear-gradient(var(--hud-color), var(--hud-color)), linear-gradient(var(--hud-color), var(--hud-color));
+  background-repeat: no-repeat;
+  background-size:
+    var(--hud-len) 1.5px, 1.5px var(--hud-len), var(--hud-len) 1.5px, 1.5px var(--hud-len),
+    var(--hud-len) 1.5px, 1.5px var(--hud-len), var(--hud-len) 1.5px, 1.5px var(--hud-len);
+  background-position:
+    top left, top left, top right, top right,
+    bottom left, bottom left, bottom right, bottom right;
+}
+
+/* Brilho carmesim: só elementos de marca (botão principal, símbolo, score). Estado nunca brilha. */
+@utility glow-crimson {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--crimson) 45%, transparent),
+    0 10px 36px -10px color-mix(in oklab, var(--crimson) 60%, transparent);
+}
+
+@utility text-glow {
+  text-shadow: 0 0 22px color-mix(in oklab, var(--rubi) 55%, transparent);
+}
+
+/* Superfície de vidro escuro (cabeçalho, painéis sobre o hero). */
+@utility glass {
+  background-color: color-mix(in oklab, var(--background) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
   }
+  body {
+    @apply text-foreground;
+    background:
+      radial-gradient(1100px 520px at 50% -12%, color-mix(in oklab, var(--crimson) 9%, transparent), transparent 62%),
+      var(--background);
+    background-attachment: fixed;
+  }
   ::selection {
-    background: oklch(0.86 0.13 188 / 0.45);
+    background: color-mix(in oklab, var(--crimson) 45%, transparent);
+    color: #fff;
   }
   h1,
   h2,
@@ -192,5 +258,14 @@
 @media (prefers-reduced-motion: no-preference) {
   html {
     scroll-behavior: smooth;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

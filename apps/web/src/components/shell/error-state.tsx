@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 export function ErrorState({ title, retryHref }: { title: string; retryHref: string }) {
   return (
     <main className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 px-4 py-16 text-center">
-      <LogoMark className="size-10 opacity-80" />
+      <LogoMark size={48} className="opacity-90" />
       <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
       <p className="text-sm text-muted-foreground">A API não respondeu. Tente de novo em alguns segundos.</p>
       <Link href={retryHref} className={buttonVariants({ variant: "outline" })}>

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Olharium — HUD Neon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Michroma&display=block">
+<style>
+  :root {
+    --obsidiana: #07060A; --grafite: #15111A; --linha: #2A2430;
+    --carmesim: #E3123C; --neon: #FF3B5C; --profundo: #7A0820;
+    --nevoa: #F4F1F3; --cinza: #A69DAA; --ciano: #4FD9E6;
+    --verde: #2FD38A; --ambar: #F5B83D; --falha: #FF6B2C;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 1000px; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(620px 620px at 370px 410px, rgba(227,18,60,.20), transparent 70%),
+      linear-gradient(rgba(255,59,92,.035) 1px, transparent 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, rgba(255,59,92,.035) 1px, transparent 1px) 0 0 / 40px 40px,
+      var(--obsidiana);
+    color: var(--nevoa);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    position: relative;
+  }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .label { font: 500 11px/1 "IBM Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--cinza); }
+  .label b { color: var(--neon); font-weight: 600; }
+
+  header { position: absolute; left: 40px; right: 40px; top: 26px; display: flex; justify-content: space-between; align-items: center; }
+  header .id { display: flex; gap: 18px; align-items: center; }
+  header .tag { border: 1px solid var(--linha); padding: 6px 10px; border-radius: 3px; }
+
+  /* left: hero */
+  .hero { position: absolute; left: 40px; top: 62px; width: 660px; height: 900px; }
+  .hero .frame { position: absolute; inset: 0 0 auto 0; height: 640px; border: 1px solid var(--linha); border-radius: 6px; background: radial-gradient(closest-side, rgba(20,8,14,.9), rgba(7,6,10,.6)); }
+  .hero .frame::before, .hero .frame::after { content: ""; position: absolute; width: 18px; height: 18px; border: 2px solid var(--neon); }
+  .hero .frame::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+  .hero .frame::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+  .hero img { position: absolute; left: 30px; top: 20px; width: 600px; height: 600px; }
+  .hero .coords { position: absolute; top: 14px; left: 16px; }
+  .hero .coords2 { position: absolute; bottom: 14px; right: 16px; text-align: right; }
+  .slogan { position: absolute; top: 668px; left: 0; width: 660px; }
+  .slogan h2 { font: 600 38px/1.12 "IBM Plex Sans", sans-serif; letter-spacing: -.01em; }
+  .slogan h2 em { font-style: normal; color: var(--neon); }
+  .phases { position: absolute; top: 776px; left: 0; width: 660px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .phase { border: 1px solid var(--linha); border-radius: 4px; padding: 12px 14px; background: rgba(21,17,26,.75); }
+  .phase .t { display: flex; align-items: center; gap: 8px; font: 600 15px/1 "IBM Plex Mono", monospace; color: var(--nevoa); }
+  .phase .t i { width: 14px; height: 7px; background: var(--neon); clip-path: polygon(0 50%, 40% 0, 100% 50%, 40% 100%); }
+  .phase p { margin-top: 8px; font-size: 13px; line-height: 1.35; color: var(--cinza); }
+  .story { position: absolute; top: 884px; left: 0; width: 660px; font-size: 13px; line-height: 1.45; color: var(--cinza); }
+
+  /* right column */
+  .col { position: absolute; left: 740px; top: 62px; width: 820px; }
+  .card { border: 1px solid var(--linha); border-radius: 6px; background: rgba(21,17,26,.82); position: relative; }
+  .card > .label { position: absolute; top: 12px; left: 14px; }
+  .lockups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; height: 140px; }
+  .lockups .card { display: grid; place-items: center; padding-top: 14px; }
+  .lockups .light { background: #F4F1F3; border-color: #E2DCE0; }
+  .lockups .light .label { color: #5C5462; }
+  .lockups img { width: 350px; }
+
+  .icons { margin-top: 12px; height: 328px; padding: 36px 22px 14px; display: flex; align-items: flex-end; gap: 26px; }
+  .icons figure { text-align: center; }
+  .icons figcaption { margin-top: 8px; font: 500 11px/1 "IBM Plex Mono", monospace; color: var(--cinza); }
+  .icons .sep { width: 1px; align-self: stretch; background: var(--linha); margin: 0 4px; }
+  .tabs { display: flex; flex-direction: column; gap: 10px; margin-left: auto; align-self: center; }
+  .tab { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 8px 8px 0 0; font-size: 13px; width: 170px; }
+  .tab.d { background: #201B25; color: var(--nevoa); }
+  .tab.l { background: #FFFFFF; color: #1E1A22; border: 1px solid #DDD6DB; }
+
+  .palette { margin-top: 12px; padding: 34px 14px 12px; height: 176px; }
+  .row { display: grid; gap: 8px; }
+  .row.brand { grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr; }
+  .row.ui { grid-template-columns: repeat(6, 1fr); margin-top: 8px; }
+  .sw { height: 58px; border-radius: 4px; padding: 8px 9px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid rgba(255,255,255,.06); }
+  .row.ui .sw { height: 60px; }
+  .sw .meta { display: flex; flex-direction: column; gap: 3px; }
+  .sw b { font: 600 12px/1.15 "IBM Plex Sans", sans-serif; }
+  .sw span { font: 500 11px/1 "IBM Plex Mono", monospace; opacity: .85; }
+  .sw small { font: 400 10px/1 "IBM Plex Mono", monospace; opacity: .75; }
+
+  .grad { margin-top: 12px; height: 60px; padding: 31px 14px 6px; }
+  .grad .bar { height: 18px; border-radius: 3px; background: linear-gradient(90deg, #12020A 0%, #7A0820 22%, #E3123C 55%, #FF3B5C 78%, #FF8FA3 100%); }
+  .grad .ticks { height: 5px; margin-top: 3px; background: repeating-linear-gradient(90deg, rgba(255,59,92,.55) 0 1px, transparent 1px 19.5px); }
+  .card > .label.stops { left: auto; right: 14px; color: var(--nevoa); }
+
+  .type { margin-top: 12px; height: 142px; padding: 32px 16px 10px; display: grid; grid-template-columns: 1.05fr 1fr 1fr; gap: 16px; }
+  .type .s1 { font: 400 26px/1 "Michroma", sans-serif; letter-spacing: .12em; margin-top: 10px; }
+  .type .s2 { font: 600 20px/1.12 "IBM Plex Sans", sans-serif; margin-top: 8px; }
+  .type .s3 { font: 500 18px/1.1 "IBM Plex Mono", monospace; color: var(--neon); margin-top: 10px; }
+  .type p { font-size: 12px; line-height: 1.4; color: var(--cinza); margin-top: 10px; }
+  .type .name { font: 600 13px/1 "IBM Plex Sans", sans-serif; color: var(--nevoa); }
+  .type .role { font: 500 10px/1 "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--cinza); margin-top: 5px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="id">
+      <span class="label tag"><b>Conceito 03</b> · HUD Neon</span>
+      <span class="label">Olharium — identidade visual, 2ª rodada</span>
+    </div>
+    <span class="label">Hack Brasil 2026 · Trilha 06 · Cibersegurança</span>
+  </header>
+
+  <section class="hero">
+    <div class="frame">
+      <span class="label coords">Marca principal · hero.svg</span>
+      <img src="hero.svg" alt="Marca principal do Olharium: íris carmesim num painel de mira">
+      <span class="label coords2">Três fragmentos · simetria de 120°</span>
+    </div>
+    <div class="slogan"><h2>Vigia por você.<br><em>Responde com você.</em></h2></div>
+    <div class="phases">
+      <div class="phase"><div class="t"><i></i>15 MIN</div><p>Agora: travar o que dá para travar.</p></div>
+      <div class="phase"><div class="t"><i></i>1 H</div><p>Primeira hora: avisar banco, trocar acessos.</p></div>
+      <div class="phase"><div class="t"><i></i>24 H</div><p>Próximas 24 h: LGPD, ANPD e registros.</p></div>
+    </div>
+    <p class="story">Os três fragmentos que giram em volta da pupila são as três fases da resposta. Cada um aponta para o seu marcador no anel de fora e deixa um rastro de luz, que é o tempo andando.</p>
+  </section>
+
+  <section class="col">
+    <div class="lockups">
+      <div class="card"><span class="label">Fundo escuro · logo-dark.svg</span><img src="logo-dark.svg" alt="Logotipo horizontal em fundo escuro"></div>
+      <div class="card light"><span class="label">Fundo claro · logo-light.svg</span><img src="logo-light.svg" alt="Logotipo horizontal em fundo claro"></div>
+    </div>
+
+    <div class="card icons">
+      <span class="label">Ícone de app · icon.svg &nbsp;/&nbsp; favicon.svg</span>
+      <figure><img src="icon.svg" width="256" height="256" alt=""><figcaption>256 px</figcaption></figure>
+      <figure><img src="icon.svg" width="64" height="64" alt=""><figcaption>64 px</figcaption></figure>
+      <figure><img src="icon.svg" width="32" height="32" alt=""><figcaption>32 px</figcaption></figure>
+      <div class="sep"></div>
+      <figure><img src="favicon.svg" width="32" height="32" alt=""><figcaption>32 px</figcaption></figure>
+      <figure><img src="favicon.svg" width="16" height="16" alt=""><figcaption>16 px</figcaption></figure>
+      <div class="tabs">
+        <div class="tab d"><img src="favicon.svg" width="16" height="16" alt="">Olharium</div>
+        <div class="tab l"><img src="favicon.svg" width="16" height="16" alt="">Olharium</div>
+      </div>
+    </div>
+
+    <div class="card palette">
+      <span class="label">Paleta</span>
+      <div class="row brand">
+        <div class="sw" style="background:#E3123C;color:#fff"><b>Carmesim Vigília</b><span>#E3123C · marca</span></div>
+        <div class="sw" style="background:#FF3B5C;color:#07060A"><b>Neon Rubi</b><span>#FF3B5C</span></div>
+        <div class="sw" style="background:#7A0820;color:#F4F1F3"><b>Carmesim Profundo</b><span>#7A0820</span></div>
+        <div class="sw" style="background:#07060A;color:#F4F1F3;border-color:#2A2430"><b>Obsidiana</b><span>#07060A</span></div>
+        <div class="sw" style="background:#15111A;color:#F4F1F3;border-color:#2A2430"><b>Grafite</b><span>#15111A</span></div>
+      </div>
+      <div class="row ui">
+        <div class="sw" style="background:#F4F1F3;color:#0F0B12"><b>Névoa</b><div class="meta"><small>neutro · texto</small><span>#F4F1F3</span></div></div>
+        <div class="sw" style="background:#A69DAA;color:#0F0B12"><b>Cinza Sinal</b><div class="meta"><small>neutro · apoio</small><span>#A69DAA</span></div></div>
+        <div class="sw" style="background:#4FD9E6;color:#07060A"><b>Ciano Telemetria</b><div class="meta"><small>acento · foco</small><span>#4FD9E6</span></div></div>
+        <div class="sw" style="background:#2FD38A;color:#07060A"><b>Verde Sinal</b><div class="meta"><small>estado · ok</small><span>#2FD38A</span></div></div>
+        <div class="sw" style="background:#F5B83D;color:#07060A"><b>Âmbar Alerta</b><div class="meta"><small>estado · atenção</small><span>#F5B83D</span></div></div>
+        <div class="sw" style="background:#FF6B2C;color:#07060A"><b>Laranja Falha</b><div class="meta"><small>estado · erro</small><span>#FF6B2C</span></div></div>
+      </div>
+    </div>
+
+    <div class="card grad">
+      <span class="label">Gradiente Ativação</span>
+      <span class="label stops">#12020A → #7A0820 → #E3123C → #FF3B5C → #FF8FA3</span>
+      <div class="bar"></div><div class="ticks"></div>
+    </div>
+
+    <div class="card type">
+      <span class="label">Tipografia (Google Fonts, OFL)</span>
+      <div>
+        <div class="name">Michroma</div><div class="role">Wordmark e títulos curtos</div>
+        <div class="s1">OLHARIUM</div>
+      </div>
+      <div>
+        <div class="name">IBM Plex Sans</div><div class="role">Texto e interface</div>
+        <div class="s2">Seus dados vazaram. Vamos por partes.</div>
+      </div>
+      <div>
+        <div class="name">IBM Plex Mono</div><div class="role">Telemetria e prazos</div>
+        <div class="s3">T+15MIN · T+1H · T+24H</div>
+        <p>Rótulos do painel, horários, códigos de protocolo.</p>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

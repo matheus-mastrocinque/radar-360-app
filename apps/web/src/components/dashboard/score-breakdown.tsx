@@ -1,8 +1,16 @@
 import { Calculator } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Dashboard, ScoreFactor } from "@/lib/dashboard";
+import { cn } from "@/lib/utils";
+import { LEVEL_BANDS, LEVEL_STYLE } from "./styles";
 
-function FactorTable({ title, factors, points, raw, cap }: {
+function FactorTable({
+  title,
+  factors,
+  points,
+  raw,
+  cap,
+}: {
   title: string;
   factors: ScoreFactor[];
   points: number;
@@ -17,15 +25,21 @@ function FactorTable({ title, factors, points, raw, cap }: {
       </div>
       <table className="w-full text-sm">
         <caption className="sr-only">Pontos de {title.toLowerCase()} no score</caption>
-        <tbody className="divide-y">
+        <thead className="sr-only">
+          <tr>
+            <th scope="col">Fator</th>
+            <th scope="col">Pontos</th>
+          </tr>
+        </thead>
+        <tbody>
           {factors.length === 0 ? (
-            <tr>
+            <tr className="border-b border-white/[0.06]">
               <td className="py-2 text-muted-foreground">Nada somado aqui.</td>
               <td />
             </tr>
           ) : (
             factors.map((factor) => (
-              <tr key={factor.label}>
+              <tr key={factor.label} className="border-b border-white/[0.06]">
                 <td className="py-2 pr-3">
                   <span>{factor.label}</span>
                   <span className="ml-2 text-xs text-muted-foreground">{factor.detail}</span>
@@ -49,11 +63,13 @@ function FactorTable({ title, factors, points, raw, cap }: {
 export function ScoreBreakdown({ score }: { score: Dashboard["score"] }) {
   const leakFactors = score.factors.filter((factor) => factor.group === "leaks");
   const networkFactors = score.factors.filter((factor) => factor.group === "network");
+  const level = LEVEL_STYLE[score.level];
+  const LevelIcon = level.icon;
   return (
     <Card id="como-calculamos" className="scroll-mt-20">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-signal">
+        <CardTitle className="flex items-center gap-2.5 font-semibold tracking-tight">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-rubi ring-1 ring-white/[0.06]">
             <Calculator className="size-4" aria-hidden />
           </span>
           Como calculamos o seu score
@@ -64,13 +80,13 @@ export function ScoreBreakdown({ score }: { score: Dashboard["score"] }) {
       </CardHeader>
       <CardContent className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-10">
         <div className="flex flex-col gap-4 text-sm leading-relaxed text-muted-foreground">
-          <div className="flex flex-col gap-1 rounded-lg bg-ink px-4 py-3 font-mono text-[13px] text-ink-foreground">
-            <span className="eyebrow text-[10px] text-ink-muted">Fórmula</span>
+          <div className="flex flex-col gap-1.5 rounded-lg bg-ink px-4 py-3 font-mono text-[13px] text-foreground ring-1 ring-white/[0.06]">
+            <span className="eyebrow text-[10px] text-rubi">Fórmula</span>
             <span>
-              score = vazamentos <span className="text-ink-muted">(até 70)</span> + rede{" "}
-              <span className="text-ink-muted">(até 30)</span>
+              score = vazamentos <span className="text-muted-foreground">(até 70)</span> + rede{" "}
+              <span className="text-muted-foreground">(até 30)</span>
             </span>
-            <span className="text-ink-muted">vai de 0 a 100</span>
+            <span className="text-muted-foreground">vai de 0 a 100</span>
           </div>
           <p>
             <span className="font-medium text-foreground">Vazamentos:</span> cada tipo de dado exposto soma o seu peso
@@ -81,10 +97,25 @@ export function ScoreBreakdown({ score }: { score: Dashboard["score"] }) {
             <span className="font-medium text-foreground">Rede:</span> cada problema da última auditoria de cada rede
             soma pela gravidade: crítico 12, alto 8, médio 4, baixo 1.
           </p>
-          <p>
-            <span className="font-medium text-foreground">Faixas:</span> 0 a 24 baixo, 25 a 49 moderado, 50 a 79 alto,
-            80 ou mais crítico.
-          </p>
+          <div className="flex flex-col gap-2">
+            <span className="font-medium text-foreground">Faixas:</span>
+            <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+              {LEVEL_BANDS.map((band) => (
+                <li
+                  key={band.level}
+                  className="flex flex-col gap-0.5 rounded-md bg-ink px-2.5 py-1.5 ring-1 ring-white/[0.06]"
+                >
+                  <span className="flex items-center gap-1.5 text-xs text-foreground">
+                    <span className={cn("size-1.5 rounded-full", LEVEL_STYLE[band.level].bar)} aria-hidden />
+                    {band.label}
+                  </span>
+                  <span className="font-mono text-[11px]">
+                    {band.from} a {band.to === 100 ? 100 : band.to - 1}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
         <div className="flex flex-col gap-6">
           <FactorTable
@@ -101,8 +132,19 @@ export function ScoreBreakdown({ score }: { score: Dashboard["score"] }) {
             raw={score.network.raw}
             cap={score.network.cap}
           />
-          <div className="flex items-center justify-between rounded-lg bg-muted/60 px-4 py-3 font-medium">
-            <span>Score total</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-ink px-4 py-3 ring-1 ring-white/[0.06]">
+            <span className="flex flex-wrap items-center gap-2.5 font-medium">
+              Score total
+              <span
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-2 py-px font-mono text-[10px] tracking-wider uppercase ring-1 ring-inset",
+                  level.badge,
+                )}
+              >
+                <LevelIcon className="size-3" aria-hidden />
+                {level.label}
+              </span>
+            </span>
             <span className="font-mono text-lg tabular-nums">
               {score.value} <span className="text-sm text-muted-foreground">/ {score.max}</span>
             </span>

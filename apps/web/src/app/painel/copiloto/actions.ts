@@ -64,6 +64,49 @@ export async function reportIncident(_previous: ReportState | null, formData: Fo
   return { error: "Algo deu errado do nosso lado. Tente de novo em instantes.", text };
 }
 
+export interface CompanyNoticeState {
+  error: string;
+  company: string;
+  occurredAt: string;
+  dataClasses: string[];
+}
+
+/** "Uma empresa me avisou que vazou meus dados": abre o plano com a notificação LGPD pronta. */
+export async function reportCompanyNotice(
+  _previous: CompanyNoticeState | null,
+  formData: FormData,
+): Promise<CompanyNoticeState> {
+  const token = await requireToken();
+  const company = String(formData.get("company") ?? "").trim();
+  const occurredAt = String(formData.get("occurredAt") ?? "").trim();
+  const dataClasses = formData.getAll("dataClasses").map(String);
+  const keep = { company, occurredAt, dataClasses };
+
+  if (company.length < 2) return { error: "Informe o nome da empresa.", ...keep };
+  if (dataClasses.length === 0) return { error: "Marque ao menos um dado que a empresa disse ter vazado.", ...keep };
+
+  let response: Response;
+  try {
+    response = await callApi(token, "/me/incidents/company-notice", "POST", {
+      company,
+      dataClasses,
+      ...(occurredAt ? { occurredAt } : {}),
+    });
+  } catch {
+    return { error: "Não conseguimos falar com o servidor agora. Tente de novo em instantes.", ...keep };
+  }
+  if (response.status === 401) redirect("/?sessao=expirada");
+  const body = (await response.json().catch(() => ({}))) as {
+    id?: string;
+    error?: string;
+    issues?: Array<{ message?: string }>;
+  };
+  if (response.status === 201 && body.id) redirect(`/painel/copiloto/${body.id}#lgpd`);
+  if (response.status === 400) return { error: body.issues?.[0]?.message ?? body.error ?? "Revise os dados.", ...keep };
+  if (response.status === 429) return { error: body.error ?? "Muitos pedidos em pouco tempo. Espere um minuto.", ...keep };
+  return { error: "Algo deu errado do nosso lado. Tente de novo em instantes.", ...keep };
+}
+
 /** "Plano de resposta" de um vazamento detectado: abre o incidente (ou o existente) e navega até ele. */
 export async function openBreachPlan(breachId: string) {
   const token = await requireToken();

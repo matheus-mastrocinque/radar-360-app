@@ -2,6 +2,7 @@
 node_modules/
 dist/
 .next/
+.next-*/
 out/
 coverage/
 *.tsbuildinfo
@@ -35,3 +36,12 @@ Thumbs.db
 
 # Notas internas da dupla (não publicar)
 briefing-hackbrasil.md
+
+# Prints de conferência e conceitos de marca não escolhidos (ficam só na máquina).
+# A marca escolhida (conceito 03 da 2ª rodada) e os documentos vão para o git.
+branding/telas/
+branding/auditoria/
+branding/p0-prints/
+branding/concepts/
+branding/concepts-v2/*
+!branding/concepts-v2/conceito-03/

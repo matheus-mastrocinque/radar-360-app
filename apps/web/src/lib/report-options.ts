@@ -11,3 +11,18 @@ export const REPORT_OPTIONS: Array<{ type: ReportableType; label: string; exampl
   { type: "PHISHING", label: "Link ou site falso", example: "Digitei a senha num site falso" },
   { type: "IDENTITY_FRAUD", label: "Conta ou dívida em meu nome", example: "Abriram um empréstimo no meu CPF" },
 ];
+
+/** O que a empresa disse que vazou. Chaves da tabela curada da API (data-classes.ts). */
+export const LEAKED_DATA_OPTIONS: Array<{ key: string; label: string }> = [
+  { key: "email", label: "E-mail" },
+  { key: "senha", label: "Senha" },
+  { key: "cpf", label: "CPF" },
+  { key: "telefone", label: "Telefone" },
+  { key: "nome", label: "Nome" },
+  { key: "endereco", label: "Endereço" },
+  { key: "data_nascimento", label: "Data de nascimento" },
+  { key: "cartao", label: "Cartão de crédito" },
+  { key: "dados_bancarios", label: "Dados bancários" },
+  { key: "rg", label: "RG" },
+  { key: "dados_saude", label: "Dados de saúde" },
+];

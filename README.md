@@ -1,16 +1,14 @@
-# Radar360
+# Olharium
 
-**Seus dados vazaram. Saiba o que fazer agora.**
+**Vigia por você. Responde com você.**
 
-O Radar360 é uma plataforma de cibersegurança pessoal, criada para o Hack Brasil 2026 (Trilha 06, Cibersegurança). Ela tem três frentes:
+O Olharium é uma plataforma de cibersegurança pessoal, criada para o Hack Brasil 2026 (Trilha 06, Cibersegurança). Ela tem três frentes:
 
-- **Monitoramento contínuo:** verifica e-mail, CPF e telefone do usuário em vazamentos e avisa só quando surge um risco novo.
-- **Plano de ação com LGPD:** a partir de um alerta ou de um relato ("caí num golpe do PIX"), gera o que fazer em 15 minutos, 1 hora e 24 horas, além da notificação para a empresa responsável.
-- **Auditoria da rede:** um agente leve, que roda no computador do usuário, mostra:
-  - em casa, os aparelhos vulneráveis da rede;
-  - em Wi-Fi público, o que o próprio computador está expondo.
+- **Vazamentos que afetam você:** a pessoa marca os serviços que usa ("Minhas contas") e vê os vazamentos **reais e públicos** de cada um, do catálogo verificado do Have I Been Pwned (só metadados). E-mail, CPF e telefone monitorados são cruzados por HMAC com a base de vazamentos.
+- **Plano de ação com LGPD:** de um vazamento, de um relato ("caí num golpe do Pix") ou de um aviso da empresa, gera o que fazer em 15 minutos, 1 hora e 24 horas, a notificação LGPD pronta para a empresa e, sem resposta em 15 dias, a petição à ANPD.
+- **Auditoria e correção da rede:** um agente leve no computador da pessoa mostra o que está exposto (em casa e em Wi-Fi público) e **corrige com o OK dela a cada passo**: liga o firewall, muda o perfil de rede, desliga compartilhamentos, bloqueia portas e fecha portas abertas no roteador via UPnP, sempre com "desfazer".
 
-> **Demo pública:** [radar360-web.vercel.app](https://radar360-web.vercel.app). Clique em "Entrar como demo": a persona e todos os dados são fictícios.
+> **Demo pública:** [radar360-web.vercel.app](https://radar360-web.vercel.app). Clique em "Entrar como demo": a persona, as contas e as redes são fictícias; os vazamentos de "Minhas contas" são reais e públicos. O que está pronto e o que falta: [docs/FUNCIONALIDADES.md](docs/FUNCIONALIDADES.md).
 
 ## Arquitetura
 
@@ -25,11 +23,12 @@ O Radar360 é uma plataforma de cibersegurança pessoal, criada para o Hack Bras
 
 - **Identificadores protegidos:** CPF, telefone e e-mail monitorados são guardados como **HMAC-SHA256** com chave secreta fora do banco, além de uma versão mascarada para exibição. Um hash simples não protegeria: CPF e telefone caem por força bruta.
 - **Só dados do próprio usuário:** o sistema só monitora dados verificados do dono da conta e nunca mostra o conteúdo vazado, apenas a fonte, a data e as categorias expostas.
-- **Dados fictícios na demo:** pessoas e empresas da demo são inventadas.
+- **Dados fictícios na demo:** a persona e as empresas da base de demonstração são inventadas. Os vazamentos reais vêm só como metadados públicos (empresa, data, categorias), nunca com dado pessoal.
 - **Agente local:**
   - em casa, só varre a rede depois de o usuário confirmar que ela é dele (e apenas redes privadas, no máximo um /24);
   - em rede pública, não envia nenhum pacote a outros aparelhos;
-  - nunca tenta login, senha padrão ou exploração de falhas, e não altera configurações do sistema.
+  - nunca tenta login, senha padrão ou exploração de falhas;
+  - só corrige o próprio computador e o próprio roteador, mostrando antes o que vai mudar, pedindo confirmação a cada ação e guardando como desfazer.
 - **IA com dados curados:** a IA não inventa telefones, links nem artigos de lei; esses dados vêm de listas curadas.
 
 ## Como rodar localmente

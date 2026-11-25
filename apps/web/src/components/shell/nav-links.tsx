@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LifeBuoy } from "lucide-react";
+import { KeyRound, LayoutDashboard, LifeBuoy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/painel", label: "Painel", icon: LayoutDashboard, match: (path: string) => path === "/painel" },
+  {
+    href: "/painel/contas",
+    label: "Minhas contas",
+    short: "Contas",
+    icon: KeyRound,
+    match: (path: string) => path.startsWith("/painel/contas"),
+  },
   {
     href: "/painel/copiloto",
     label: "Copiloto",
@@ -20,7 +27,7 @@ export function NavLinks() {
   const pathname = usePathname();
   return (
     <nav aria-label="Principal" className="flex h-full items-stretch gap-1 sm:gap-2">
-      {LINKS.map(({ href, label, icon: Icon, match }) => {
+      {LINKS.map(({ href, label, short, icon: Icon, match }) => {
         const active = match(pathname);
         return (
           <Link
@@ -37,7 +44,14 @@ export function NavLinks() {
             )}
           >
             <Icon className="size-4" aria-hidden />
-            {label}
+            {short ? (
+              <>
+                <span className="sm:hidden">{short}</span>
+                <span className="hidden sm:inline">{label}</span>
+              </>
+            ) : (
+              label
+            )}
           </Link>
         );
       })}

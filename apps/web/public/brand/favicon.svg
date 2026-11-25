@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="t">
+<title id="t">Olharium — favicon</title>
+<defs><radialGradient id="f-iris" cx="16" cy="16" r="14" gradientUnits="userSpaceOnUse">
+  <stop offset=".3" stop-color="#B00C30"/><stop offset=".72" stop-color="#FF2D55"/><stop offset="1" stop-color="#C20F36"/>
+</radialGradient></defs>
+<circle cx="16" cy="16" r="16" fill="#07060A"/>
+<circle cx="16" cy="16" r="13.4" fill="url(#f-iris)"/>
+<circle cx="16" cy="16" r="4.4" fill="#07060A"/>
+<path d="M21.2 7.3L16.6 5.1L12.6 7.3L16.6 9.5ZM20.93 24.85L25.14 21.97L25.23 17.41L21.33 19.77ZM5.87 15.85L6.26 20.93L10.17 23.29L10.07 18.73Z" fill="#07060A"/>
+</svg>

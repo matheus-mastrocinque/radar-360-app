@@ -48,6 +48,16 @@ export interface ScanSummary {
   }>;
   bySeverity: Record<Severity, number>;
   findings: Finding[];
+  /** Correções que o agente aplicou, cada uma confirmada pelo usuário. */
+  fixes: ScanFix[];
+}
+
+export interface ScanFix {
+  kind: string;
+  target: "computer" | "router";
+  title: string;
+  appliedAt: string;
+  findingKind: string | null;
 }
 
 export interface BreachItem {
@@ -72,6 +82,7 @@ export interface Dashboard {
     assets: number;
     verifiedAssets: number;
     importantNetworkAlerts: number;
+    fixesApplied: number;
   };
   score: {
     value: number;

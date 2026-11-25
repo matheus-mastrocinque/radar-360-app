@@ -52,7 +52,10 @@ O código em produção é exatamente o do `6e55eb1`.
   - deduplica pelo índice único (`assetId`, `breachId`);
   - roda com `RUN_CRON=true` ou com `POST /internal/jobs/breach-check` e o header `X-Jobs-Secret`;
   - **ainda não envia e-mail.**
-- **Rede:** `POST /network/scans` recebe o resultado do agente local, autenticado pelo token de pareamento. O contrato está em `modules/network/schema.ts`.
+- **Rede:** `POST /network/scans` recebe o resultado do agente local, autenticado pelo token de pareamento. O contrato está em `modules/network/schema.ts`. O campo opcional `fixes` traz as correções que o agente aplicou com o OK do usuário; o painel mostra "Corrigido pelo agente".
+- **Vazamentos reais** (`modules/breaches/hibp.ts`): importa o catálogo público do Have I Been Pwned, só metadados (empresa, domínio, data, categorias, contas afetadas). Entram só vazamentos **verificados** pelo HIBP; ficam de fora os atribuídos à empresa errada, os sensíveis, as listas de spam e os sem domínio. Hoje são 872, 7 deles de empresas brasileiras. Rota: `POST /internal/jobs/breach-catalog` (com `X-Jobs-Secret`); local: `npm run catalog:import -w @radar/api`. A licença é CC BY 4.0, por isso toda tela mostra a atribuição.
+- **Minhas contas** (`modules/accounts`): a pessoa marca os serviços que usa (lista curada + catálogo), e cada um mostra os vazamentos reais do mesmo domínio, com "Plano de resposta". Guarda só nome e domínio, nunca login nem senha. Na demo, as contas pertencem à sessão; cada login demo já vem com Netshoes, LinkedIn e Nubank.
+- **"A empresa me avisou"** (`POST /me/incidents/company-notice`): empresa, mês opcional e o que vazou (lista fechada) viram um plano com a notificação LGPD pronta.
 - **Copiloto de incidentes** (`modules/incidents`):
 
   | Rota | O que faz |
@@ -63,13 +66,14 @@ O código em produção é exatamente o do `6e55eb1`.
   | `PATCH /me/incidents/:id/steps` | Marca e desmarca passos do plano |
   | `POST /me/incidents/:id/lgpd` | Registra que a notificação foi enviada ou respondida, ou desfaz o envio |
 
-- **Testes:** 67 testes passando (`npm test`).
+- **Testes:** 83 testes passando (`npm test`).
 
 ### Web (`apps/web`)
 
 - **Landing:** tem o botão "Entrar como demo".
 - **Painel `/painel`:** score, vazamentos (cada um com o botão "Plano de resposta"), ativos e rede.
-- **Copiloto:** `/painel/copiloto` recebe o relato e lista os incidentes; `/painel/copiloto/[id]` mostra o plano de 15 min, 1 h e 24 h e a notificação LGPD com a petição à ANPD.
+- **Copiloto:** `/painel/copiloto` recebe o relato, o formulário "Uma empresa avisou que vazou seus dados?" e lista os incidentes; `/painel/copiloto/[id]` mostra o plano de 15 min, 1 h e 24 h e a notificação LGPD com a petição à ANPD. Vazamentos reais aparecem com o selo "Vazamento real" e a fonte.
+- **Minhas contas:** `/painel/contas`, com busca, sugestões, verificação em duas etapas, "mexe com dinheiro" e os vazamentos reais de cada serviço.
 - **Layout comum** (`app/painel/layout.tsx`): navegação, aviso de demo e o aviso "não é assessoria jurídica" no rodapé.
 - **Sessão:** o Next guarda o cookie httpOnly `r360_session` e o repassa à API como Bearer (`lib/session.ts`).
 - **Chamadas à API:** todas passam por `lib/api-fetch.ts`, que também repassa o IP do visitante. O formulário de relato roda no navegador e, por isso, pega as opções de `lib/report-options.ts`, não de `lib/incidents.ts`.
@@ -93,7 +97,8 @@ O código em produção é exatamente o do `6e55eb1`.
 6. **Vídeo** (29/11). Mostre o agente rodando na nossa própria rede, já que o júri não roda o agente, e depois o fluxo da demo: painel, vazamento, plano, LGPD e relato.
 7. **README final:** o link da demo já está lá; faltam prints e a revisão final.
 8. **Texto da submissão:** nome, frase curta e descrição. Assim que o vídeo existir, enviem uma primeira versão de garantia: vale a última versão enviada até 30/11 às 23h59.
-9. **Versões leves,** só se os itens 1 a 3 estiverem prontos até 26/11: leitura de termos e inventário de contas. Se atrasar, corte nesta ordem: inventário, Procon, vulnerabilidade por firmware, leitura de termos.
+9. **Versões leves:** o inventário de contas já entrou, como "Minhas contas". Falta a leitura de termos, só se os itens 1 a 3 estiverem prontos até 26/11.
+10. **Testar as correções do agente de verdade.** `scanner.py --corrigir` (com `--simular` e `--desfazer`) já existe, com 138 testes, mas os comandos de mudança e o UPnP só foram exercitados com mocks. Antes do vídeo, rodem num computador e num roteador de vocês: `--mode public --corrigir` num terminal de administrador e `--mode home --corrigir` na rede de casa. Muitos roteadores só deixam fechar portas abertas pelo próprio aparelho (erros 606/718), e o agente explica isso.
 
 Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perguntando sobre o scanner já foi enviado.
 
@@ -111,6 +116,8 @@ Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perg
   - leituras: 60 por minuto;
   - escritas: 30 por minuto.
 - **Modelo do Gemini:** o padrão é `gemini-3.5-flash-lite` e pode ser trocado com `GEMINI_MODEL`.
+- **Vazamento de serviço não é exposição confirmada.** Quando um serviço de "Minhas contas" teve vazamento, não sabemos se a conta da pessoa estava nele. Por isso a tela diz "o serviço teve um vazamento", e a notificação LGPD pede à empresa que confirme (art. 18, I e II). Esses vazamentos não entram no score; só as exposições confirmadas por HMAC entram.
+- **Quem pode abrir plano de um vazamento:** quem tem um dado verificado exposto nele, ou quem marcou o serviço (mesmo domínio) em "Minhas contas". Qualquer outro caso devolve 404.
 
 ## Produção
 
@@ -143,6 +150,8 @@ Os segredos estão como "Secret": nem a CLI consegue ler o valor de volta. O `PO
   ```
 
 - **Migrações:** rode `npx prisma migrate deploy` em `apps/api` com `DATABASE_URL` apontando para a `DATABASE_URL_UNPOOLED`, que você tira de `npx vercel env pull`.
+- **Catálogo de vazamentos reais:** depois de publicar, chame `POST /internal/jobs/breach-catalog` com o `X-Jobs-Secret` (o workflow do GitHub Actions também faz isso a cada 6 horas).
+- **Migração nova sem terminal interativo:** o `prisma migrate dev` recusa rodar sem terminal interativo. Gere o SQL com `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, salve em `prisma/migrations/<data>_<nome>/migration.sql` e aplique com `npx prisma migrate deploy`.
 - **Seed de novo:** precisa do mesmo `HMAC_SECRET` de produção. Se ninguém tiver o valor, gere outro, grave com `npx vercel env add HMAC_SECRET production --force`, rode o seed com esse valor e publique a API de novo.
 
 **Armadilhas já resolvidas:**

@@ -1,60 +1,94 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Bot, CalendarClock, ChevronRight, EyeOff, Info, ScanSearch, UserRound } from "lucide-react";
+import { ArrowRight, CalendarClock, ChevronRight, Scale, ShieldCheck } from "lucide-react";
+import { BreachFacts, ReportedBreachFacts } from "@/components/copilot/facts";
+import { originOf, summaryOf, TYPE_ICON } from "@/components/copilot/incident-meta";
 import { LgpdPanel } from "@/components/copilot/lgpd-panel";
-import { ResponsePlan } from "@/components/copilot/plan";
-import { dataClassTone } from "@/components/dashboard/styles";
+import { PHASE_META } from "@/components/copilot/phase-style";
+import { PlanArrival } from "@/components/copilot/plan-arrival";
+import { nextStepOf, ProgressMeter, ResponsePlan, stepAnchor } from "@/components/copilot/plan";
+import { LgpdBadge, StateAlert } from "@/components/copilot/status";
 import { ErrorState } from "@/components/shell/error-state";
 import { fetchIncident, type IncidentView } from "@/lib/incidents";
-import { formatCalendarDate, formatDate, formatMonth } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { getSessionToken } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Plano de resposta · Radar360" };
+export const metadata: Metadata = { title: "Plano de resposta · Olharium" };
 
-const CLASSIFIED_BY: Record<IncidentView["classifiedBy"], { label: string; icon: typeof Bot }> = {
-  SYSTEM: { label: "Detectado pelo monitoramento", icon: ScanSearch },
-  USER: { label: "Tipo escolhido por você", icon: UserRound },
-  AI: { label: "Tipo identificado pela IA (Gemini)", icon: Bot },
-  RULES: { label: "Tipo identificado por palavras-chave", icon: Bot },
-};
+const PANEL_LINK =
+  "group flex items-center gap-3 rounded-lg bg-ink px-3 py-2.5 ring-1 ring-white/[0.07] transition-colors outline-none hover:bg-muted hover:ring-white/15 focus-visible:ring-3 focus-visible:ring-ring/60";
 
-function BreachFacts({ breach }: { breach: NonNullable<IncidentView["breach"]> }) {
-  const sorted = [...breach.dataClasses].sort((a, b) => b.weight - a.weight);
+/** O único destaque de HUD da tela: o instrumento com o progresso e o próximo passo. */
+function PlanInstrument({ incident }: { incident: IncidentView }) {
+  const { plan } = incident;
+  const next = nextStepOf(plan);
+  const complete = plan.progress.total > 0 && plan.progress.done >= plan.progress.total;
+
   return (
-    <div className="grid gap-px overflow-hidden rounded-xl bg-border shadow-xs ring-1 ring-border sm:grid-cols-[auto_auto_minmax(0,1fr)]">
-      <div className="flex flex-col gap-1 bg-card px-4 py-3">
-        <span className="text-xs text-muted-foreground">Ocorreu em</span>
-        <span className="text-sm font-medium">{formatMonth(breach.occurredAt)}</span>
-      </div>
-      <div className="flex flex-col gap-1 bg-card px-4 py-3">
-        <span className="text-xs text-muted-foreground">Divulgação pela empresa</span>
-        <span className="text-sm font-medium">
-          {breach.disclosedAt ? formatCalendarDate(breach.disclosedAt) : "Ainda não divulgado pela empresa"}
-        </span>
-      </div>
-      <div className="flex flex-col gap-2 bg-card px-4 py-3">
-        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-          <EyeOff className="size-3.5" aria-hidden />
-          Categorias expostas (nunca o dado vazado)
-          {breach.isSynthetic && (
-            <span className="rounded-full px-2 py-px ring-1 ring-border ring-inset">Incidente sintético</span>
-          )}
-        </span>
-        <ul className="flex flex-wrap gap-1.5">
-          {sorted.map((item) => (
-            <li
-              key={item.key}
-              title={item.why}
-              className={cn("rounded-md px-2 py-0.5 text-xs font-medium ring-1", dataClassTone(item.weight))}
-            >
-              {item.label}
-            </li>
-          ))}
+    <div className="hud-corners p-2 [--hud-color:var(--rubi)] [--hud-len:16px]">
+      <div className="bg-grid flex flex-col gap-4 rounded-xl bg-card p-4 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.04),0_16px_40px_-24px_rgb(0_0_0/0.9)] ring-1 ring-white/[0.07] sm:p-5">
+        <div className="flex items-end justify-between gap-4">
+          <span className="eyebrow text-muted-foreground">Progresso do plano</span>
+          <span className="font-mono leading-none tabular-nums" aria-hidden>
+            <span className={cn("text-4xl font-semibold", complete ? "text-success" : "text-glow text-rubi")}>
+              {plan.progress.done}
+            </span>
+            <span className="text-lg text-muted-foreground">/{plan.progress.total}</span>
+          </span>
+        </div>
+        <ProgressMeter done={plan.progress.done} total={plan.progress.total} showLabel={false} />
+        <ul className="grid grid-cols-3 gap-2" aria-label="Passos feitos por fase">
+          {plan.phases.map((phase) => {
+            const done = phase.steps.filter((step) => step.done).length;
+            return (
+              <li key={phase.key} className="flex flex-col gap-0.5 font-mono">
+                <span className="text-[10px] tracking-[0.14em] text-muted-foreground">{PHASE_META[phase.key].tag}</span>
+                <span className="text-sm text-foreground tabular-nums">
+                  {done}/{phase.steps.length}
+                </span>
+              </li>
+            );
+          })}
         </ul>
+
+        {next ? (
+          <a href={`#${stepAnchor(next.step.id)}`} className={PANEL_LINK}>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="eyebrow text-rubi">
+                Próximo passo · {PHASE_META[next.phase.key].tag}
+              </span>
+              <span className="text-sm leading-snug font-medium text-foreground">{next.step.title}</span>
+            </span>
+            <ArrowRight
+              className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+              aria-hidden
+            />
+          </a>
+        ) : (
+          complete && (
+            <StateAlert tone="success" label="Concluído.">
+              Todos os passos feitos.
+            </StateAlert>
+          )
+        )}
+
+        {incident.lgpd && (
+          <a href="#lgpd" className={PANEL_LINK}>
+            <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="eyebrow text-muted-foreground">Notificação LGPD</span>
+              <LgpdBadge status={incident.lgpd.timeline.status} />
+            </span>
+            <ArrowRight
+              className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+              aria-hidden
+            />
+            <span className="sr-only">Ir para a notificação LGPD</span>
+          </a>
+        )}
       </div>
     </div>
   );
@@ -74,14 +108,19 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
   }
 
   const incident = result.data;
-  const origin = CLASSIFIED_BY[incident.classifiedBy];
+  const origin = originOf(incident);
   const OriginIcon = origin.icon;
+  const TypeIcon = TYPE_ICON[incident.type];
 
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10">
+    <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:gap-10 sm:px-6 sm:py-10">
+      <PlanArrival />
       <div className="flex flex-col gap-5">
         <nav aria-label="Trilha" className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link href="/painel/copiloto" className="rounded-sm hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+          <Link
+            href="/painel/copiloto"
+            className="rounded-sm hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/60 focus-visible:outline-none"
+          >
             Copiloto
           </Link>
           <ChevronRight className="size-3.5" aria-hidden />
@@ -90,61 +129,93 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
           </span>
         </nav>
 
-        <header className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="rounded-full bg-ink px-2.5 py-0.5 text-xs font-medium text-ink-foreground">
-              {incident.typeLabel}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <OriginIcon className="size-3.5" aria-hidden />
-              {origin.label}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <CalendarClock className="size-3.5" aria-hidden />
-              Aberto em {formatDate(incident.createdAt)}
-            </span>
-          </div>
-          <h1 className="text-3xl font-semibold tracking-tight">{incident.title}</h1>
-          <p className="max-w-3xl leading-relaxed text-muted-foreground">
-            {incident.summary ?? incident.typeDescription}
-          </p>
+        <div className="grid items-start gap-6 lg:grid-cols-12 lg:gap-x-8">
+          <header className="flex min-w-0 flex-col gap-4 lg:col-span-8 lg:col-start-1 lg:row-start-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-ink px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-white/10">
+                <TypeIcon className="size-3.5 text-rubi" aria-hidden />
+                {incident.typeLabel}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <OriginIcon className="size-3.5" aria-hidden />
+                {origin.label}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <CalendarClock className="size-3.5" aria-hidden />
+                Aberto em{" "}
+                <time dateTime={incident.createdAt} className="font-mono">
+                  {formatDate(incident.createdAt)}
+                </time>
+              </span>
+            </div>
 
-          {incident.flags.length > 0 && (
-            <ul className="flex flex-wrap gap-1.5" aria-label="O que o seu relato indica">
-              {incident.flags.map((flag) => (
-                <li
-                  key={flag.key}
-                  className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200 ring-inset"
-                >
-                  {flag.label}
-                </li>
-              ))}
-            </ul>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{incident.title}</h1>
+            <p className="max-w-3xl leading-relaxed text-muted-foreground">
+              {summaryOf(incident)}
+            </p>
+
+            {incident.flags.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <span id="sinais" className="eyebrow text-muted-foreground">
+                  O que o seu relato indica
+                </span>
+                <ul className="flex flex-wrap gap-1.5" aria-labelledby="sinais">
+                  {incident.flags.map((flag) => (
+                    <li
+                      key={flag.key}
+                      className="inline-flex items-center gap-2 rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-white/10"
+                    >
+                      <span className="size-1.5 shrink-0 rotate-45 bg-rubi" aria-hidden />
+                      {flag.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {incident.narrative && (
+              <details className="group max-w-3xl text-sm">
+                <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-sm text-xs font-medium text-foreground/80 select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/60 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                  <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
+                  Seu relato (sem dados pessoais)
+                </summary>
+                <div className="mt-2 flex flex-col gap-2 rounded-lg bg-ink p-3.5 ring-1 ring-white/[0.07]">
+                  <p className="leading-relaxed whitespace-pre-wrap text-foreground/85">{incident.narrative}</p>
+                  <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <ShieldCheck className="size-3.5 text-success" aria-hidden />
+                    CPF, cartão, telefone, e-mail e chave Pix foram removidos antes de salvar.
+                  </span>
+                </div>
+              </details>
+            )}
+          </header>
+
+          {/* No celular, o resumo do plano vem logo depois do título; no desktop, fica ao lado do título e dos fatos. */}
+          <aside
+            aria-label="Resumo do plano"
+            className="min-w-0 lg:col-span-4 lg:col-start-9 lg:row-span-2 lg:row-start-1"
+          >
+            <PlanInstrument incident={incident} />
+          </aside>
+
+          {(incident.breach || incident.reportedBreach) && (
+            <div className="min-w-0 lg:col-span-8 lg:col-start-1">
+              {incident.breach && <BreachFacts breach={incident.breach} />}
+              {incident.reportedBreach && <ReportedBreachFacts breach={incident.reportedBreach} />}
+            </div>
           )}
-
-          {incident.narrative && (
-            <details className="group max-w-3xl text-sm">
-              <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded text-xs font-medium text-foreground/70 select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
-                <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" aria-hidden />
-                Seu relato (sem dados pessoais)
-              </summary>
-              <p className="mt-2 rounded-lg bg-card p-3 whitespace-pre-wrap text-muted-foreground ring-1 ring-border">
-                {incident.narrative}
-              </p>
-            </details>
-          )}
-        </header>
-
-        {incident.breach && <BreachFacts breach={incident.breach} />}
+        </div>
       </div>
 
       <ResponsePlan incident={incident} />
 
       {incident.lgpd && <LgpdPanel incident={incident} lgpd={incident.lgpd} />}
 
-      <p className="flex items-start gap-2 rounded-lg bg-muted/60 px-4 py-3 text-xs text-muted-foreground">
-        <Info className="mt-px size-3.5 shrink-0" aria-hidden />
-        Radar360 · {incident.disclaimer}
+      <p className="flex items-start gap-2.5 rounded-lg bg-ink px-4 py-3 text-xs leading-relaxed text-muted-foreground ring-1 ring-white/[0.06]">
+        <Scale className="mt-px size-3.5 shrink-0 text-rubi" aria-hidden />
+        <span>
+          <span className="font-mono tracking-wider text-foreground uppercase">Olharium</span> · {incident.disclaimer}
+        </span>
       </p>
     </main>
   );

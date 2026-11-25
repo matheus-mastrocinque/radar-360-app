@@ -15,6 +15,8 @@ const eslintConfig = [
     ignores: [
       "node_modules/**",
       ".next/**",
+      // Pastas de build extras (NEXT_DIST_DIR=.next-<nome>), usadas para rodar mais de um next dev.
+      ".next-*/**",
       "out/**",
       "build/**",
       "next-env.d.ts",

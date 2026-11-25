@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
+<title id="t">Olharium — ícone de app</title>
+<defs>
+  <radialGradient id="i-iris" cx="256" cy="256" r="160" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#3A0410"/>
+    <stop offset=".28" stop-color="#9E0B2B"/>
+    <stop offset=".5" stop-color="#E3123C"/>
+    <stop offset=".68" stop-color="#FF2D55"/>
+    <stop offset=".86" stop-color="#D0113A"/>
+    <stop offset="1" stop-color="#6A0820"/>
+  </radialGradient>
+  <radialGradient id="i-halo" cx="256" cy="256" r="240" gradientUnits="userSpaceOnUse">
+    <stop offset=".6" stop-color="#E3123C" stop-opacity=".6"/>
+    <stop offset="1" stop-color="#E3123C" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="i-facet" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#3A1019"/>
+    <stop offset="1" stop-color="#14040A"/>
+  </linearGradient>
+  <radialGradient id="i-plate" cx="256" cy="230" r="330" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#1F0D15"/>
+    <stop offset=".6" stop-color="#0D090F"/>
+    <stop offset="1" stop-color="#07060A"/>
+  </radialGradient>
+</defs>
+<rect width="512" height="512" rx="114" fill="url(#i-plate)"/>
+<rect x="5" y="5" width="502" height="502" rx="109" fill="none" stroke="#FF3B5C" stroke-opacity=".22" stroke-width="2"/>
+<circle cx="256" cy="256" r="240" fill="url(#i-halo)"/>
+<path d="M311.39 49.29A214 214 0 0 1 462.71 311.39M407.32 407.32A214 214 0 0 1 104.68 407.32M49.29 311.39A214 214 0 0 1 200.61 49.29" fill="none" stroke="#FF3B5C" stroke-width="14"/>
+<path d="M307.76 62.81L315.01 35.77M449.19 307.76L476.23 315.01M397.42 397.42L417.22 417.22M114.58 397.42L94.78 417.22M62.81 307.76L35.77 315.01M204.24 62.81L196.99 35.77" fill="none" stroke="#FF3B5C" stroke-width="7"/>
+<path d="M274 42L256 33L238 42L256 51ZM432.33 378.59L449.12 367.5L450.33 347.41L433.54 358.5ZM61.67 347.41L62.88 367.5L79.67 378.59L78.46 358.5Z" fill="#FF3B5C"/>
+<circle cx="256" cy="256" r="174" fill="#000"/>
+<circle cx="256" cy="256" r="160" fill="url(#i-iris)"/>
+<circle cx="256" cy="256" r="100" fill="none" stroke="#2A0209" stroke-opacity=".85" stroke-width="5"/>
+<defs><linearGradient id="i-wake0" gradientUnits="userSpaceOnUse" x1="164.81" y1="214.96" x2="222.17" y2="161.9"><stop offset="0" stop-color="#FFD6DE" stop-opacity="0"/><stop offset="1" stop-color="#FFE4EA" stop-opacity=".75"/></linearGradient><linearGradient id="i-wake1" gradientUnits="userSpaceOnUse" x1="337.13" y1="197.54" x2="354.41" y2="273.76"><stop offset="0" stop-color="#FFD6DE" stop-opacity="0"/><stop offset="1" stop-color="#FFE4EA" stop-opacity=".75"/></linearGradient><linearGradient id="i-wake2" gradientUnits="userSpaceOnUse" x1="266.06" y1="355.49" x2="191.42" y2="332.35"><stop offset="0" stop-color="#FFD6DE" stop-opacity="0"/><stop offset="1" stop-color="#FFE4EA" stop-opacity=".75"/></linearGradient></defs><path d="M153.86 210.04A112 112 0 0 1 218.11 150.6L226.23 173.19A88 88 0 0 0 175.75 219.89Z" fill="url(#i-wake0)"/><path d="M346.87 190.53A112 112 0 0 1 366.22 275.89L342.6 271.63A88 88 0 0 0 327.4 204.56Z" fill="url(#i-wake1)"/><path d="M267.26 367.43A112 112 0 0 1 183.67 341.51L199.17 323.19A88 88 0 0 0 264.85 343.55Z" fill="url(#i-wake2)"/>
+<circle cx="256" cy="256" r="48" fill="#5A0618" fill-opacity=".7"/>
+<circle cx="256" cy="256" r="44" fill="#000"/>
+<path d="M320 156L263 136L218 156L263 176Z" fill="#000"/>
+<path d="M320 156L263 136L263 156Z" fill="url(#i-facet)"/>
+<path d="M218 156L263 136L263 156Z" fill="#0C0206"/>
+<path d="M263 136L320 156" stroke="#FFE4EA" stroke-width="5" stroke-linecap="round"/>
+<path d="M310.6 361.43L356.42 322.06L361.6 273.09L321.78 302.06Z" fill="#000"/>
+<path d="M310.6 361.43L356.42 322.06L339.1 312.06Z" fill="url(#i-facet)"/>
+<path d="M361.6 273.09L356.42 322.06L339.1 312.06Z" fill="#0C0206"/>
+<path d="M356.42 322.06L310.6 361.43" stroke="#FFE4EA" stroke-width="5" stroke-linecap="round"/>
+<path d="M137.4 250.57L148.58 309.94L188.4 338.91L183.22 289.94Z" fill="#000"/>
+<path d="M137.4 250.57L148.58 309.94L165.9 299.94Z" fill="url(#i-facet)"/>
+<path d="M188.4 338.91L148.58 309.94L165.9 299.94Z" fill="#0C0206"/>
+<path d="M148.58 309.94L137.4 250.57" stroke="#FFE4EA" stroke-width="5" stroke-linecap="round"/>
+<circle cx="151.54" cy="185.54" r="14" fill="#fff" fill-opacity=".95"/>
+</svg>

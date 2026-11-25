@@ -1,14 +1,13 @@
 import type { PlanPhase } from "@/lib/incidents";
 
-/** Cor de cada fase do plano: vermelho (agora), âmbar (1 h) e azul (24 h). */
-export const PHASE_DOT: Record<PlanPhase["key"], string> = {
-  now: "bg-red-500",
-  hour: "bg-amber-400",
-  day: "bg-sky-500",
+/**
+ * As três fases do plano na linguagem da marca (T+15MIN · T+1H · T+24H).
+ * Fase é tempo, não estado: nada de success/warning/danger aqui. O destaque é o Neon Rubi, em dose baixa.
+ */
+export const PHASE_META: Record<PlanPhase["key"], { tag: string; short: string; hint: string }> = {
+  now: { tag: "T+15MIN", short: "15 min", hint: "Travar o que dá para travar" },
+  hour: { tag: "T+1H", short: "1 h", hint: "Avisar quem precisa e trocar acessos" },
+  day: { tag: "T+24H", short: "24 h", hint: "Registros, documentos e LGPD" },
 };
 
-export const PHASE_STYLE: Record<PlanPhase["key"], { rail: string; badge: string; time: string }> = {
-  now: { rail: "bg-red-500", badge: "bg-red-50 text-red-700 ring-red-200", time: "15 min" },
-  hour: { rail: "bg-amber-400", badge: "bg-amber-50 text-amber-800 ring-amber-200", time: "1 h" },
-  day: { rail: "bg-sky-500", badge: "bg-sky-50 text-sky-800 ring-sky-200", time: "24 h" },
-};
+export const PHASE_ORDER: Array<PlanPhase["key"]> = ["now", "hour", "day"];

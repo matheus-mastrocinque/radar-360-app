@@ -20,6 +20,8 @@ export interface IncidentListItem {
   typeLabel: string;
   title: string;
   source: "DETECTED" | "REPORTED";
+  /** Base da demo (seus dados) ou catálogo público (serviço que você usa). */
+  breachSource: "SYNTHETIC" | "HIBP" | null;
   createdAt: string;
   progress: { done: number; total: number };
   lgpdStatus: LgpdStatus | null;
@@ -58,6 +60,13 @@ export interface PlanPhase {
   steps: PlanStep[];
 }
 
+/** Atribuição exigida pela licença do catálogo de vazamentos reais (CC BY 4.0). */
+export interface Attribution {
+  label: string;
+  url: string;
+  license: string;
+}
+
 export interface LegalArticle {
   ref: string;
   text: string;
@@ -82,7 +91,14 @@ export interface IncidentView {
     disclosedAt: string | null;
     isSynthetic: boolean;
     dataClasses: DataClass[];
+    source: "SYNTHETIC" | "HIBP";
+    domain: string | null;
+    pwnCount: number | null;
+    sourceUrl: string | null;
+    attribution: Attribution | null;
   } | null;
+  /** Vazamento informado pelo próprio usuário ("a empresa me avisou"). */
+  reportedBreach: { company: string; occurredAt: string | null; dataClasses: DataClass[] } | null;
   plan: { phases: PlanPhase[]; progress: { done: number; total: number } };
   lgpd: {
     timeline: {

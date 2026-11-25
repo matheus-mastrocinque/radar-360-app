@@ -1,68 +1,105 @@
-import type { ScoreLevel, Severity } from "@/lib/dashboard";
+import {
+  ArrowDown,
+  CircleAlert,
+  IdCard,
+  Info,
+  Mail,
+  OctagonAlert,
+  Phone,
+  ShieldCheck,
+  TriangleAlert,
+} from "lucide-react";
+import type { AssetType, ScoreLevel, Severity } from "@/lib/dashboard";
 
-export const SEVERITY_STYLE: Record<Severity, { label: string; badge: string; dot: string; rail: string }> = {
-  critical: { label: "Crítico", badge: "bg-red-600 text-white", dot: "bg-red-600", rail: "bg-red-600" },
-  high: {
-    label: "Alto",
-    badge: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200",
-    dot: "bg-red-500",
-    rail: "bg-red-500",
-  },
-  medium: {
-    label: "Médio",
-    badge: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200",
-    dot: "bg-amber-500",
-    rail: "bg-amber-400",
-  },
-  low: {
-    label: "Baixo",
-    badge: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200",
-    dot: "bg-sky-500",
-    rail: "bg-sky-400",
-  },
-  info: {
-    label: "Info",
-    badge: "bg-muted text-muted-foreground ring-1 ring-inset ring-border",
-    dot: "bg-muted-foreground/40",
-    rail: "bg-border",
-  },
+/**
+ * Cores do painel, só com tokens do design system (docs/design-system.md).
+ * Estado usa success → warning → danger, sempre com ícone + palavra. O carmesim nunca indica estado.
+ */
+
+type Icon = React.ComponentType<{ className?: string }>;
+
+export const ASSET_META: Record<AssetType, { label: string; icon: Icon }> = {
+  EMAIL: { label: "E-mail", icon: Mail },
+  CPF: { label: "CPF", icon: IdCard },
+  PHONE: { label: "Telefone", icon: Phone },
 };
+
+export const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
+
+export const SEVERITY_STYLE: Record<Severity, { label: string; icon: Icon; badge: string; rail: string; text: string }> =
+  {
+    critical: {
+      label: "Crítico",
+      icon: OctagonAlert,
+      badge: "bg-danger/20 text-danger ring-1 ring-inset ring-danger/50",
+      rail: "border-danger",
+      text: "text-danger",
+    },
+    high: {
+      label: "Alto",
+      icon: TriangleAlert,
+      badge: "bg-danger/10 text-danger ring-1 ring-inset ring-danger/30",
+      rail: "border-danger",
+      text: "text-danger",
+    },
+    medium: {
+      label: "Médio",
+      icon: CircleAlert,
+      badge: "bg-warning/10 text-warning ring-1 ring-inset ring-warning/30",
+      rail: "border-warning",
+      text: "text-warning",
+    },
+    low: {
+      label: "Baixo",
+      icon: ArrowDown,
+      badge: "bg-white/[0.04] text-foreground/85 ring-1 ring-inset ring-white/15",
+      rail: "border-foreground/30",
+      text: "text-foreground/85",
+    },
+    info: {
+      label: "Info",
+      icon: Info,
+      badge: "text-muted-foreground ring-1 ring-inset ring-white/10",
+      rail: "border-white/10",
+      text: "text-muted-foreground",
+    },
+  };
 
 export const LEVEL_STYLE: Record<
   ScoreLevel,
-  { text: string; onDark: string; badge: string; badgeOnDark: string; bar: string; stroke: string }
+  { label: string; icon: Icon; text: string; badge: string; bar: string; stroke: string }
 > = {
   baixo: {
-    text: "text-emerald-600",
-    onDark: "text-emerald-300",
-    badge: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-    badgeOnDark: "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30",
-    bar: "bg-emerald-500",
-    stroke: "stroke-emerald-400",
+    label: "Risco baixo",
+    icon: ShieldCheck,
+    text: "text-success",
+    badge: "bg-success/10 text-success ring-success/30",
+    bar: "bg-success",
+    stroke: "stroke-success",
   },
   moderado: {
-    text: "text-yellow-600",
-    onDark: "text-yellow-300",
-    badge: "bg-yellow-50 text-yellow-800 ring-yellow-200",
-    badgeOnDark: "bg-yellow-300/15 text-yellow-100 ring-yellow-200/30",
-    bar: "bg-yellow-400",
-    stroke: "stroke-yellow-300",
+    label: "Risco moderado",
+    icon: CircleAlert,
+    text: "text-warning",
+    badge: "bg-warning/10 text-warning ring-warning/30",
+    bar: "bg-warning",
+    stroke: "stroke-warning",
   },
   alto: {
-    text: "text-orange-600",
-    onDark: "text-orange-300",
-    badge: "bg-orange-50 text-orange-700 ring-orange-200",
-    badgeOnDark: "bg-orange-400/15 text-orange-200 ring-orange-300/30",
-    bar: "bg-orange-500",
-    stroke: "stroke-orange-400",
+    label: "Risco alto",
+    icon: TriangleAlert,
+    text: "text-danger",
+    badge: "bg-danger/10 text-danger ring-danger/35",
+    bar: "bg-danger",
+    stroke: "stroke-danger",
   },
   critico: {
-    text: "text-red-600",
-    onDark: "text-red-300",
-    badge: "bg-red-50 text-red-700 ring-red-200",
-    badgeOnDark: "bg-red-400/15 text-red-200 ring-red-300/30",
-    bar: "bg-red-600",
-    stroke: "stroke-red-400",
+    label: "Risco crítico",
+    icon: OctagonAlert,
+    text: "text-danger",
+    badge: "bg-danger/20 text-danger ring-danger/55",
+    bar: "bg-danger",
+    stroke: "stroke-danger",
   },
 };
 
@@ -74,9 +111,15 @@ export const LEVEL_BANDS: Array<{ level: ScoreLevel; label: string; from: number
   { level: "critico", label: "Crítico", from: 80, to: 100 },
 ];
 
-/** Cor do chip de categoria exposta, pelo peso na tabela curada. */
+/** Peso a partir do qual uma categoria vazada é "sensível" (tabela curada: senha, CPF...). */
+export const HIGH_WEIGHT = 10;
+
+/**
+ * Cor do chip de categoria exposta, pelo peso na tabela curada. Usado também no copiloto e em
+ * "Minhas contas", sempre junto de `ring-1`. Peso alto ganha `danger`; o resto fica neutro.
+ */
 export function dataClassTone(weight: number): string {
-  if (weight >= 10) return "bg-red-50 text-red-700 ring-inset ring-red-200";
-  if (weight >= 4) return "bg-amber-50 text-amber-800 ring-inset ring-amber-200";
-  return "bg-muted text-muted-foreground ring-inset ring-border";
+  if (weight >= HIGH_WEIGHT) return "bg-danger/10 text-danger ring-inset ring-danger/40";
+  if (weight >= 4) return "bg-muted text-foreground ring-inset ring-white/10";
+  return "bg-transparent text-muted-foreground ring-inset ring-white/10";
 }
