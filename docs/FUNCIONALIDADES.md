@@ -8,7 +8,7 @@ Checklist simplificado para a dupla. Atualizado em 25/11/2026.
 - ⬜ **planejado, ainda não feito**
 - ➖ **fora do MVP**
 
-> Tudo o que está ✅ funciona no código e nos testes. Vai para a demo no ar ([radar360-web.vercel.app](https://radar360-web.vercel.app)) no próximo deploy.
+> Tudo o que está ✅ está **no ar** em [radar360-web.vercel.app](https://radar360-web.vercel.app) desde o deploy de 25/11 à noite, e passou nos roteiros de verificação no endereço público.
 
 ## 1. Entrada e demo
 
@@ -76,7 +76,7 @@ Checklist simplificado para a dupla. Atualizado em 25/11/2026.
 
 ## 7. Para fechar a demo (até 30/11)
 
-- [ ] Deploy desta versão (marca nova, Minhas contas, empresa avisou, correções) e a migração do banco de produção
+- [x] Deploy desta versão (marca nova, Minhas contas, empresa avisou, correções) e a migração do banco de produção: feito em 25/11
 - [ ] Criar os secrets `RADAR_API_URL` e `RADAR_JOBS_SECRET` no GitHub (Matheus)
 - [ ] Rodar o agente com `--corrigir` num PC e num roteador de vocês e gravar para o vídeo
 - [ ] Vídeo de até 3 min, roteiro em `docs/plano-de-valor.md`:

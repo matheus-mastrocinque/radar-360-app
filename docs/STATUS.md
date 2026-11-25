@@ -16,8 +16,11 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
 | `6f0aa53` | Este arquivo |
 | `ee08a45` | Preparação para produção: limites por visitante, teto do Gemini, workflow do job |
 | `6e55eb1` | Correções para a API rodar na Vercel e documentação de produção |
+| `f9d6d7a` | Agente corrige com consentimento a cada ação (`--corrigir`, `--simular`, `--desfazer`) |
+| `0852af8` | Vazamentos reais (catálogo HIBP), Minhas contas e "a empresa me avisou" |
+| `f401e64` | Marca Olharium (HUD Neon), design system e telas refeitas |
 
-O código em produção é exatamente o do `6e55eb1`.
+A produção roda o código do `f401e64`, publicado na noite de 25/11, com as duas migrações novas aplicadas no Neon e o catálogo de vazamentos reais importado (872 vazamentos). Todos os roteiros de verificação passaram no endereço público.
 
 ## Prazos
 
@@ -158,7 +161,8 @@ Os segredos estão como "Secret": nem a CLI consegue ler o valor de volta. O `PO
 - **Entrada da API:** a Vercel só aceita como entrada um arquivo que importe `fastify` diretamente. Por isso a instância é criada em `server.ts`, e as rotas ficam em `build-app.ts`.
 - **listen() sem `await`:** na Vercel, um `await` no `listen()` deixa toda requisição pendurada.
 - **Limites de uso por visitante:** o site repassa o IP do visitante à API, protegido pelo `PROXY_SECRET`. Sem ele, todos os visitantes contariam como um só IP.
-- **Token do agente local de produção:** foi gerado no seed de 24/11 e vale 30 dias, até 24/12. Fica com o Matheus, junto com o `JOBS_SECRET` e o `HMAC_SECRET` de produção, e nunca vai para o git.
+- **Token do agente local de produção:** foi gerado de novo no seed de 25/11 e vale 30 dias, até 25/12; o token anterior deixou de valer. Fica com o Matheus, junto com o `JOBS_SECRET` e o `HMAC_SECRET` de produção, e nunca vai para o git.
+- **Roteiros de verificação que bloqueiam sites externos:** se um roteiro bloqueia tudo o que não é `localhost`, ele também bloqueia o site de produção. Libere o domínio `radar360-web.vercel.app` ao rodar contra a produção.
 
 ## Como rodar
 
