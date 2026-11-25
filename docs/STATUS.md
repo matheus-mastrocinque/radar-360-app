@@ -74,7 +74,10 @@ A produção roda o código do `f401e64`, publicado na noite de 25/11, com as du
 ### Web (`apps/web`)
 
 - **Landing:** tem o botão "Entrar como demo".
-- **Painel `/painel`:** score, vazamentos (cada um com o botão "Plano de resposta"), ativos e rede.
+- **Painel `/painel` (central de comando):** tudo numa tela. Faixa de números, score, **mapa de exposição** (você no centro, seus dados, redes e contas ao redor, e o que ameaça cada um na borda), **fila de ação** (ordenada pelo peso no score), agente local e linha do tempo. Qualquer ponto abre uma **gaveta de detalhes** (`<dialog>` nativo) com o detalhe completo e o botão "Plano de resposta"; dentro dela, os links empilham com "Voltar".
+  - Código em `components/cockpit/`: `model.ts` monta a fila, a linha do tempo e o layout do mapa (determinístico, sem IA); `details.tsx` monta os painéis da gaveta por chave (`breach:<id>`, `finding:<id>`, `device:<ip>`, `service:<id>`...); `inspector.tsx` é a gaveta.
+  - O mapa tem dois desenhos: largo (`MAP_WIDE`) e alto para o celular (`MAP_TALL`).
+  - `AGENT_FIXABLE_KINDS` em `model.ts` precisa bater com `FIXABLE_FINDING_KINDS` do `scanner.py`: é o que decide se a gaveta diz "o agente corrige isso" ou "correção manual".
 - **Copiloto:** `/painel/copiloto` recebe o relato, o formulário "Uma empresa avisou que vazou seus dados?" e lista os incidentes; `/painel/copiloto/[id]` mostra o plano de 15 min, 1 h e 24 h e a notificação LGPD com a petição à ANPD. Vazamentos reais aparecem com o selo "Vazamento real" e a fonte.
 - **Minhas contas:** `/painel/contas`, com busca, sugestões, verificação em duas etapas, "mexe com dinheiro" e os vazamentos reais de cada serviço.
 - **Layout comum** (`app/painel/layout.tsx`): navegação, aviso de demo e o aviso "não é assessoria jurídica" no rodapé.

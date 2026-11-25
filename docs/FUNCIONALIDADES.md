@@ -15,6 +15,7 @@ Checklist simplificado para a dupla. Atualizado em 25/11/2026.
 - [x] ✅ Landing com o botão **"Entrar como demo"** (persona fictícia, sem cadastro)
 - [x] ✅ Cada sessão demo é isolada: os incidentes e as contas de um jurado somem com a sessão (2 h)
 - [x] ✅ Identidade visual **HUD Neon**: logo, favicon, tema escuro e design system (`docs/design-system.md`)
+- [x] ✅ **Central de comando**: o painel inteiro numa tela, com mapa de exposição, fila de ação, agente e linha do tempo; qualquer ponto abre uma gaveta de detalhes, sem trocar de página
 - [ ] ⬜ Cadastro real, com e-mail confirmado por link
 
 ## 2. Vazamentos: "o que vazou de quem eu sou e do que eu uso"

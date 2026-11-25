@@ -1,4 +1,3 @@
-import { ArrowDown, Gauge } from "lucide-react";
 import type { Dashboard } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
 import { LEVEL_BANDS, LEVEL_STYLE } from "./styles";
@@ -37,7 +36,7 @@ function arc(radius: number, from: number, to: number): string {
 
 const TICKS = Array.from({ length: 51 }, (_, index) => index * 2);
 
-function ScoreGauge({ score }: { score: Dashboard["score"] }) {
+export function ScoreGauge({ score, className }: { score: Dashboard["score"]; className?: string }) {
   const style = LEVEL_STYLE[score.level];
   const LevelIcon = style.icon;
   const marker = polar(R_BAND, score.value);
@@ -45,7 +44,12 @@ function ScoreGauge({ score }: { score: Dashboard["score"] }) {
   const hundred = polar(118, 100);
 
   return (
-    <div className="hud-corners relative mx-auto aspect-square w-full max-w-[320px] [--hud-color:color-mix(in_oklab,var(--rubi)_75%,transparent)] [--hud-len:18px]">
+    <div
+      className={cn(
+        "hud-corners relative mx-auto aspect-square w-full max-w-[320px] [--hud-color:color-mix(in_oklab,var(--rubi)_75%,transparent)] [--hud-len:18px]",
+        className,
+      )}
+    >
       <svg viewBox={`0 0 ${VIEW} ${VIEW}`} className="absolute inset-0 size-full overflow-visible" aria-hidden focusable="false">
         {/* Asas da mira no eixo horizontal */}
         <g className="stroke-rubi" strokeWidth={1.5}>
@@ -149,7 +153,7 @@ function ScoreGauge({ score }: { score: Dashboard["score"] }) {
   );
 }
 
-function ComponentBar({ label, points, cap }: { label: string; points: number; cap: number }) {
+export function ComponentBar({ label, points, cap }: { label: string; points: number; cap: number }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-3 font-mono text-xs">
@@ -170,107 +174,5 @@ function ComponentBar({ label, points, cap }: { label: string; points: number; c
         <div className="h-full rounded-full bg-foreground/75" style={{ width: `${(points / cap) * 100}%` }} />
       </div>
     </div>
-  );
-}
-
-export function ScoreCard({ score }: { score: Dashboard["score"] }) {
-  const style = LEVEL_STYLE[score.level];
-  const topFactors = [...score.factors].sort((a, b) => b.points - a.points).slice(0, 4);
-
-  return (
-    <section
-      aria-labelledby="score-titulo"
-      className="relative isolate flex h-full flex-col gap-6 overflow-hidden rounded-xl bg-card p-5 ring-1 ring-white/[0.07] shadow-[inset_0_1px_0_0_rgb(255_255_255/0.04),0_16px_40px_-24px_rgb(0_0_0/0.9)] sm:p-6"
-    >
-      <div
-        className="absolute inset-0 -z-10 bg-grid [mask-image:radial-gradient(ellipse_at_50%_28%,black,transparent_70%)]"
-        aria-hidden
-      />
-
-      <header className="flex flex-col gap-1">
-        <h2 id="score-titulo" className="flex items-center gap-2.5 text-base font-semibold tracking-tight">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-rubi ring-1 ring-white/[0.06]">
-            <Gauge className="size-4" aria-hidden />
-          </span>
-          Score de exposição
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          De 0 a 100. Quanto maior, mais exposto você está.
-          <span className="sr-only">
-            {" "}
-            Seu score é {score.value} de {score.max}: {style.label.toLowerCase()}.
-          </span>
-        </p>
-      </header>
-
-      <div className="flex flex-col gap-6 md:grid md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:items-center md:gap-8 lg:flex lg:flex-col lg:items-stretch lg:gap-6">
-        <div className="flex flex-col gap-5">
-          <ScoreGauge score={score} />
-
-          <ol className="grid grid-cols-4 gap-1 text-center" aria-label="Faixas do score">
-            {LEVEL_BANDS.map((band) => {
-              const active = band.level === score.level;
-              return (
-                <li
-                  key={band.level}
-                  aria-current={active ? "true" : undefined}
-                  className={cn(
-                    "flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[11px] leading-tight",
-                    active ? "bg-white/[0.05] text-foreground ring-1 ring-white/15 ring-inset" : "text-muted-foreground",
-                  )}
-                >
-                  <span className={cn("h-1 w-6 rounded-full", LEVEL_STYLE[band.level].bar, !active && "opacity-40")} aria-hidden />
-                  <span className="font-medium">{band.label}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {band.from}–{band.to === 100 ? 100 : band.to - 1}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-3 rounded-lg bg-ink p-3.5 ring-1 ring-white/[0.06]">
-            <ComponentBar label="Vazamentos" points={score.leaks.points} cap={score.leaks.cap} />
-            <ComponentBar label="Rede" points={score.network.points} cap={score.network.cap} />
-            <div className="flex items-baseline justify-between gap-3 border-t border-white/[0.07] pt-2.5 font-mono text-xs">
-              <span className="text-muted-foreground">
-                {score.leaks.points} + {score.network.points} =
-              </span>
-              <span className="text-foreground tabular-nums">
-                <span className="font-semibold">{score.value}</span>
-                <span className="text-muted-foreground"> / {score.max}</span>
-              </span>
-            </div>
-          </div>
-
-          {topFactors.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <span className="eyebrow text-muted-foreground">O que mais pesa</span>
-              <ul className="flex flex-col">
-                {topFactors.map((factor) => (
-                  <li
-                    key={`${factor.group}-${factor.label}`}
-                    className="flex items-baseline justify-between gap-3 border-b border-white/[0.05] py-1.5 text-sm last:border-b-0"
-                  >
-                    <span className="min-w-0 truncate">{factor.label}</span>
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">+{factor.points}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <a
-            href="#como-calculamos"
-            className="flex w-fit items-center gap-1.5 rounded-md text-sm font-medium text-telemetry underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            Como calculamos o seu score
-            <ArrowDown className="size-3.5" aria-hidden />
-          </a>
-        </div>
-      </div>
-    </section>
   );
 }

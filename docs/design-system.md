@@ -69,6 +69,8 @@ Badge de estado:   rounded-full px-2 py-px font-mono text-[11px] uppercase track
 - **Botão secundário:** `variant="outline"`; terciário: `variant="ghost"`.
 - **Campos:** `h-9 rounded-md border border-input bg-ink px-3 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40`.
 - **Chips de seleção** (radio/checkbox `sr-only`): estado marcado `bg-crimson/15 text-foreground ring-crimson/50`; desmarcado `bg-ink ring-white/10 hover:bg-muted`.
+- **Módulo da central de comando:** `<Panel>` (`components/cockpit/panel.tsx`), não `<Card>`. Barra de título técnica com índice e rótulo em mono (`01 | SCORE DE EXPOSIÇÃO`) e um indicador curto à direita; corpo denso, sem parágrafo de descrição. A explicação vai para a gaveta.
+- **Gaveta de detalhes:** `InspectorProvider` + `InspectTrigger` (`components/cockpit/inspector.tsx`). Tudo que é clicável no painel abre um painel por chave; o detalhe nunca exige trocar de página.
 - **Categorias de dado vazado:** chips neutros `bg-muted text-foreground ring-1 ring-white/10`; peso alto (≥ 10) com `ring-danger/40 text-danger`.
 
 ## 5. HUD em dose baixa
@@ -80,7 +82,9 @@ Badge de estado:   rounded-full px-2 py-px font-mono text-[11px] uppercase track
 | `glow-crimson` | Brilho carmesim | Botão principal, símbolo, score |
 | `text-glow` | Brilho no texto Neon Rubi | Número do score, títulos do hero |
 | `glass` | Vidro escuro com blur | Cabeçalho, painéis sobre o hero |
-| `animate-orbit`, `animate-hud-pulse`, `animate-radar-sweep` | Rotação lenta, pulso, varredura | Só no hero e no score; respeitam "reduzir movimento" |
+| `animate-orbit`, `animate-hud-pulse`, `animate-radar-sweep` | Rotação lenta, pulso, varredura | Só no hero, no score e no mapa de exposição; respeitam "reduzir movimento" |
+| `animate-dash-flow` | Tracejado andando numa ligação do mapa | Só em ameaça ativa (vazamento novo, achado alto ou crítico) |
+| `animate-drawer-in` | Entrada da gaveta de detalhes | Gaveta |
 
 Regra: no máximo **um** elemento com HUD forte por tela. O resto é interface limpa.
 

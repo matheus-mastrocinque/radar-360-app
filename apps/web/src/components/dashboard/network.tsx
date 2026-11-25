@@ -1,14 +1,13 @@
 import { Fragment } from "react";
-import { CheckCircle2, ChevronRight, House, Laptop, MonitorSmartphone, Router, Terminal, Undo2, Wrench } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckCircle2, ChevronRight, Laptop, MonitorSmartphone, Router, Terminal, Undo2, Wrench } from "lucide-react";
 import type { Finding, ScanSummary, Severity } from "@/lib/dashboard";
 import { formatDateTime, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { SEVERITY_ORDER, SEVERITY_STYLE } from "./styles";
 
-type AgentMode = "home" | "public";
+export type AgentMode = "home" | "public";
 
-function SeverityBadge({ severity, className }: { severity: Severity; className?: string }) {
+export function SeverityBadge({ severity, className }: { severity: Severity; className?: string }) {
   const style = SEVERITY_STYLE[severity];
   const Icon = style.icon;
   return (
@@ -80,7 +79,7 @@ function FindingRow({ finding, device }: { finding: Finding; device: string | nu
 }
 
 /** Correções que o agente aplicou, cada uma com a confirmação do usuário. É a prova de que o produto corrige. */
-function FixList({ fixes }: { fixes: ScanSummary["fixes"] }) {
+export function FixList({ fixes }: { fixes: ScanSummary["fixes"] }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg bg-success/10 p-3.5 ring-1 ring-success/30 ring-inset">
       <div className="flex items-center justify-between gap-3">
@@ -121,7 +120,7 @@ function FixList({ fixes }: { fixes: ScanSummary["fixes"] }) {
   );
 }
 
-function AgentCommand({ mode, label }: { mode: AgentMode; label: string }) {
+export function AgentCommand({ mode, label }: { mode: AgentMode; label: string }) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-xs text-muted-foreground">{label}</span>
@@ -148,143 +147,90 @@ function deviceName(scan: ScanSummary, ip: string | null): string | null {
   return name ? `${name} ${ip}` : ip;
 }
 
-function ScanCard({
+/** Detalhe de uma auditoria (casa ou rede pública), para a gaveta do painel. */
+export function ScanDetail({
   scan,
-  title,
-  icon: Icon,
-  scopeNote,
   emptyText,
   agentMode,
 }: {
   scan: ScanSummary | null;
-  title: string;
   agentMode: AgentMode;
-  icon: React.ComponentType<{ className?: string }>;
-  scopeNote: string;
   emptyText: string;
 }) {
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2.5 font-semibold tracking-tight">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-rubi ring-1 ring-white/[0.06]">
-            <Icon className="size-4" aria-hidden />
-          </span>
-          {title}
-        </CardTitle>
-        <CardDescription>{scopeNote}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-5">
-        {!scan ? (
-          <div className="flex flex-col gap-3 rounded-lg p-4 text-sm text-muted-foreground ring-1 ring-white/15 ring-inset [border-style:dashed]">
-            <p>{emptyText}</p>
-            <AgentCommand
-              mode={agentMode}
-              label={
-                agentMode === "home"
-                  ? "Conectado à rede de casa, rode no seu computador:"
-                  : "Conectado a um Wi-Fi público, rode no seu computador:"
-              }
-            />
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-col gap-2.5 rounded-lg bg-ink px-3.5 py-3 ring-1 ring-white/[0.06]">
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-muted-foreground">
-                <span className="tracking-wider uppercase">Última auditoria</span>
-                <span className="text-foreground">{formatDateTime(scan.finishedAt)}</span>
-                {scan.scope === "home" && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>{plural(scan.devices.length, "aparelho")}</span>
-                  </>
-                )}
-                {scan.network.wifiSecurity && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>Wi-Fi {scan.network.wifiSecurity}</span>
-                  </>
-                )}
-              </span>
-              <SeverityCounts bySeverity={scan.bySeverity} />
-            </div>
-
-            {scan.fixes.length > 0 && <FixList fixes={scan.fixes} />}
-
-            {scan.scope === "home" && scan.devices.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <span className="eyebrow text-[10px] text-muted-foreground">Aparelhos encontrados</span>
-                <ul className="flex flex-wrap gap-1.5" aria-label="Aparelhos encontrados">
-                  {scan.devices.map((device) => {
-                    const DeviceIcon = device.ip === scan.network.gateway ? Router : MonitorSmartphone;
-                    return (
-                      <li
-                        key={device.ip}
-                        className="flex max-w-full items-center gap-1.5 rounded-md bg-ink px-2 py-1 text-xs ring-1 ring-white/[0.07]"
-                      >
-                        <DeviceIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                        <span className="truncate">{device.model ?? device.hostname ?? "Aparelho sem nome"}</span>
-                        <span className="font-mono text-muted-foreground">{device.ip}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-
-            {scan.findings.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <span className="eyebrow text-[10px] text-muted-foreground">O que o agente encontrou</span>
-                <ul className="flex flex-col gap-4">
-                  {scan.findings.map((finding) => (
-                    <FindingRow key={finding.id} finding={finding} device={deviceName(scan, finding.deviceIp)} />
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="mt-auto border-t border-white/[0.06] pt-4">
-              <AgentCommand mode={agentMode} label="Para auditar de novo, rode no seu computador:" />
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function NetworkSection({ network }: { network: { home: ScanSummary | null; public: ScanSummary | null } }) {
-  return (
-    <section id="sua-rede" className="flex scroll-mt-20 flex-col gap-4 pt-4" aria-labelledby="rede-titulo">
-      <div className="flex flex-col gap-1.5">
-        <span className="eyebrow text-rubi">Agente local</span>
-        <h2 id="rede-titulo" className="text-xl font-semibold tracking-tight">
-          Sua rede
-        </h2>
-        <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          O agente só varre a sua própria rede, com o seu consentimento. Ele corrige o que dá para corrigir no seu
-          computador e no seu roteador, pedindo confirmação a cada ação e guardando como desfazer. Nunca tenta senhas
-          nem invade aparelhos.
-        </p>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ScanCard
-          scan={network.home}
-          title="Rede de casa"
-          agentMode="home"
-          icon={House}
-          scopeNote="Aparelhos da sua rede Wi-Fi e o que cada um deixa aberto."
-          emptyText="Nenhuma auditoria da rede de casa ainda."
-        />
-        <ScanCard
-          scan={network.public}
-          title="Rede pública · este computador"
-          agentMode="public"
-          icon={Laptop}
-          scopeNote="Em Wi-Fi público, o agente audita só o seu computador e não envia nada a outros aparelhos."
-          emptyText="Nenhuma auditoria em rede pública ainda."
+  if (!scan) {
+    return (
+      <div className="flex flex-col gap-3 rounded-lg p-4 text-sm text-muted-foreground ring-1 ring-white/15 ring-inset [border-style:dashed]">
+        <p>{emptyText}</p>
+        <AgentCommand
+          mode={agentMode}
+          label={
+            agentMode === "home"
+              ? "Conectado à rede de casa, rode no seu computador:"
+              : "Conectado a um Wi-Fi público, rode no seu computador:"
+          }
         />
       </div>
-    </section>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2.5 rounded-lg bg-ink px-3.5 py-3 ring-1 ring-white/[0.06]">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-muted-foreground">
+          <span className="tracking-wider uppercase">Última auditoria</span>
+          <span className="text-foreground">{formatDateTime(scan.finishedAt)}</span>
+          {scan.scope === "home" && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{plural(scan.devices.length, "aparelho")}</span>
+            </>
+          )}
+          {scan.network.wifiSecurity && (
+            <>
+              <span aria-hidden>·</span>
+              <span>Wi-Fi {scan.network.wifiSecurity}</span>
+            </>
+          )}
+        </span>
+        <SeverityCounts bySeverity={scan.bySeverity} />
+      </div>
+
+      {scan.fixes.length > 0 && <FixList fixes={scan.fixes} />}
+
+      {scan.scope === "home" && scan.devices.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="eyebrow text-[10px] text-muted-foreground">Aparelhos encontrados</span>
+          <ul className="flex flex-wrap gap-1.5" aria-label="Aparelhos encontrados">
+            {scan.devices.map((device) => {
+              const DeviceIcon = device.ip === scan.network.gateway ? Router : MonitorSmartphone;
+              return (
+                <li
+                  key={device.ip}
+                  className="flex max-w-full items-center gap-1.5 rounded-md bg-ink px-2 py-1 text-xs ring-1 ring-white/[0.07]"
+                >
+                  <DeviceIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="truncate">{device.model ?? device.hostname ?? "Aparelho sem nome"}</span>
+                  <span className="font-mono text-muted-foreground">{device.ip}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {scan.findings.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <span className="eyebrow text-[10px] text-muted-foreground">O que o agente encontrou</span>
+          <ul className="flex flex-col gap-4">
+            {scan.findings.map((finding) => (
+              <FindingRow key={finding.id} finding={finding} device={deviceName(scan, finding.deviceIp)} />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="border-t border-white/[0.06] pt-4">
+        <AgentCommand mode={agentMode} label="Para auditar e corrigir de novo, rode no seu computador:" />
+      </div>
+    </div>
   );
 }

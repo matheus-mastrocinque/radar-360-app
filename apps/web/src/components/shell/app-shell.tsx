@@ -13,7 +13,7 @@ function initials(name: string): string {
 export function AppHeader({ userName }: { userName: string | null }) {
   return (
     <header className="glass sticky top-0 z-40 border-b border-white/[0.06]">
-      <div className="mx-auto flex h-14 max-w-6xl items-stretch gap-2 px-4 sm:gap-6 sm:px-6">
+      <div className="mx-auto flex h-14 max-w-[1440px] items-stretch gap-2 px-4 sm:gap-6 sm:px-6">
         <Link
           href="/painel"
           aria-label="Olharium: ir para o painel"
@@ -49,7 +49,7 @@ export function AppHeader({ userName }: { userName: string | null }) {
 export function DemoBanner() {
   return (
     <div className="border-b border-warning/20 bg-warning/[0.07] text-foreground">
-      <div className="mx-auto flex max-w-6xl items-start gap-2.5 px-4 py-2 text-[13px] sm:items-center sm:px-6">
+      <div className="mx-auto flex max-w-[1440px] items-start gap-2.5 px-4 py-2 text-[13px] sm:items-center sm:px-6">
         <span className="mt-px flex shrink-0 items-center gap-1 rounded-full bg-warning/15 px-2 py-px font-mono text-[11px] font-semibold tracking-wider text-warning uppercase ring-1 ring-warning/30 sm:mt-0">
           <FlaskConical className="size-3" aria-hidden />
           Demo
@@ -66,7 +66,7 @@ export function DemoBanner() {
 export function AppFooter() {
   return (
     <footer className="border-t border-white/[0.06]">
-      <div className="mx-auto flex max-w-6xl flex-col gap-1.5 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div className="mx-auto flex max-w-[1440px] flex-col gap-1.5 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <span className="flex items-center gap-2">
           <LogoMark size={16} />
           <span className="font-mono tracking-wider uppercase">Vigia por você. Responde com você.</span>

@@ -1,5 +1,3 @@
-import { Calculator } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Dashboard, ScoreFactor } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
 import { LEVEL_BANDS, LEVEL_STYLE } from "./styles";
@@ -60,25 +58,17 @@ function FactorTable({
   );
 }
 
-export function ScoreBreakdown({ score }: { score: Dashboard["score"] }) {
+export function ScoreDetail({ score }: { score: Dashboard["score"] }) {
   const leakFactors = score.factors.filter((factor) => factor.group === "leaks");
   const networkFactors = score.factors.filter((factor) => factor.group === "network");
   const level = LEVEL_STYLE[score.level];
   const LevelIcon = level.icon;
   return (
-    <Card id="como-calculamos" className="scroll-mt-20">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2.5 font-semibold tracking-tight">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-rubi ring-1 ring-white/[0.06]">
-            <Calculator className="size-4" aria-hidden />
-          </span>
-          Como calculamos o seu score
-        </CardTitle>
-        <CardDescription>
-          Fórmula fixa e pública, sem inteligência artificial: o mesmo cenário sempre dá o mesmo número.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-10">
+    <div className="flex flex-col gap-6">
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        Fórmula fixa e pública, sem inteligência artificial: o mesmo cenário sempre dá o mesmo número.
+      </p>
+      <div className="grid gap-6">
         <div className="flex flex-col gap-4 text-sm leading-relaxed text-muted-foreground">
           <div className="flex flex-col gap-1.5 rounded-lg bg-ink px-4 py-3 font-mono text-[13px] text-foreground ring-1 ring-white/[0.06]">
             <span className="eyebrow text-[10px] text-rubi">Fórmula</span>
@@ -99,7 +89,7 @@ export function ScoreBreakdown({ score }: { score: Dashboard["score"] }) {
           </p>
           <div className="flex flex-col gap-2">
             <span className="font-medium text-foreground">Faixas:</span>
-            <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
               {LEVEL_BANDS.map((band) => (
                 <li
                   key={band.level}
@@ -150,7 +140,7 @@ export function ScoreBreakdown({ score }: { score: Dashboard["score"] }) {
             </span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

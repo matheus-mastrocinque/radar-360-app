@@ -1,8 +1,7 @@
-import { BellRing, Database, EyeOff, FileText, FlaskConical, ShieldCheck, TriangleAlert } from "lucide-react";
+import { BellRing, FileText, FlaskConical, TriangleAlert } from "lucide-react";
 import { openBreachPlan } from "@/app/painel/copiloto/actions";
 import { ArrivalForm } from "@/components/copilot/arrival-form";
 import { SubmitButton } from "@/components/submit-button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BreachItem } from "@/lib/dashboard";
 import { formatCalendarDate, formatDate, formatMonth } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -27,7 +26,7 @@ function DateItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BreachCard({ breach }: { breach: BreachItem }) {
+export function BreachCard({ breach }: { breach: BreachItem }) {
   const sortedClasses = [...breach.dataClasses].sort((a, b) => b.weight - a.weight);
   const titleId = `vazamento-${breach.id}`;
   return (
@@ -139,43 +138,5 @@ function BreachCard({ breach }: { breach: BreachItem }) {
         </ArrivalForm>
       </footer>
     </article>
-  );
-}
-
-export function BreachesSection({ breaches }: { breaches: BreachItem[] }) {
-  return (
-    <Card id="vazamentos" className="scroll-mt-20">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2.5 font-semibold tracking-tight">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-ink text-rubi ring-1 ring-white/[0.06]">
-            <Database className="size-4" aria-hidden />
-          </span>
-          Vazamentos com seus dados
-          {breaches.length > 0 && (
-            <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">({breaches.length})</span>
-          )}
-        </CardTitle>
-        <CardDescription className="flex items-start gap-1.5">
-          <EyeOff className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          Mostramos a fonte, as datas e as categorias expostas. Nunca o dado vazado.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {breaches.length === 0 ? (
-          <p className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2.5 text-sm ring-1 ring-success/30">
-            <ShieldCheck className="size-4 shrink-0 text-success" aria-hidden />
-            Nenhum vazamento encontrado com os seus dados. Avisaremos se surgir algum.
-          </p>
-        ) : (
-          breaches.map((breach) => <BreachCard key={breach.id} breach={breach} />)
-        )}
-        {breaches.length > 0 && (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <TriangleAlert className="size-3 shrink-0 text-danger" aria-hidden />
-            Dado sensível: é o que mais pesa no score.
-          </p>
-        )}
-      </CardContent>
-    </Card>
   );
 }

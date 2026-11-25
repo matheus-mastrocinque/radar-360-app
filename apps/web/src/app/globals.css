@@ -78,6 +78,22 @@
   --animate-blip: blip 2.8s ease-out infinite;
   --animate-orbit: orbit 30s linear infinite;
   --animate-hud-pulse: hud-pulse 3.2s ease-in-out infinite;
+  --animate-drawer-in: drawer-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-dash-flow: dash-flow 1.4s linear infinite;
+
+  @keyframes drawer-in {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+
+  /* Tracejado andando ao longo da ligação: ameaça ativa no mapa de exposição. */
+  @keyframes dash-flow {
+    to {
+      stroke-dashoffset: -16;
+    }
+  }
 
   @keyframes radar-sweep {
     to {
