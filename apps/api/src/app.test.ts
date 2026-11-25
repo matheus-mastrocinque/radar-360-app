@@ -16,7 +16,13 @@ function fakeDb(overrides: Partial<Record<string, unknown>> = {}): Db {
     pairingToken: { findUnique: async () => null },
     session: { findUnique: async () => null },
     user: { findFirst: async () => null },
-    breach: { findUnique: async () => null },
+    breach: { findUnique: async () => null, findFirst: async () => null, findMany: async () => [], groupBy: async () => [] },
+    trackedService: {
+      findFirst: async () => null,
+      findMany: async () => [],
+      count: async () => 0,
+      create: async () => ({ id: "ts1" }),
+    },
     ...overrides,
   } as unknown as Db;
 }
@@ -333,5 +339,147 @@ describe("limites de uso por visitante", () => {
   it("sem PROXY_SECRET configurado, vale sempre o IP da conexão", () => {
     const key = rateLimitKey(undefined);
     assert.equal(key(request({ [CLIENT_IP_HEADER]: "203.0.113.7", [PROXY_SECRET_HEADER]: secret })), "10.0.0.1");
+  });
+});
+
+describe("Minhas contas e vazamentos reais", () => {
+  const auth = { authorization: "Bearer r360s_valido" };
+
+  /** Sessão válida da persona demo + tabelas em memória. */
+  function accountsDb(overrides: Partial<Record<string, unknown>> = {}) {
+    const created: Array<Record<string, unknown>> = [];
+    const db = fakeDb({
+      session: {
+        findUnique: async () => ({ id: "s1", userId: "u1", expiresAt: new Date(Date.now() + 60_000) }),
+      },
+      user: { findUnique: async () => ({ isDemo: true, name: "Ana Demo" }), findFirst: async () => null },
+      trackedService: {
+        findFirst: async () => null,
+        findMany: async () => [],
+        count: async () => 0,
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          created.push(data);
+          return { id: `ts${created.length}` };
+        },
+      },
+      incident: {
+        count: async () => 0,
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          created.push(data);
+          return { id: `inc${created.length}` };
+        },
+        findFirst: async () => null,
+        findMany: async () => [],
+      },
+      ...overrides,
+    });
+    return { db, created };
+  }
+
+  it("GET /me/accounts exige sessão", async () => {
+    const app = await buildApp({ db: fakeDb(), env, logger: false });
+    const response = await app.inject({ method: "GET", url: "/me/accounts" });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("POST /me/accounts recusa endereço que não é domínio", async () => {
+    const { db } = accountsDb();
+    const app = await buildApp({ db, env, logger: false });
+    const response = await app.inject({ method: "POST", url: "/me/accounts", headers: auth, payload: { domain: "minha conta" } });
+    assert.equal(response.statusCode, 400);
+  });
+
+  it("POST /me/accounts normaliza o domínio, usa o nome do catálogo e prende a conta à sessão demo", async () => {
+    const { db, created } = accountsDb({
+      breach: { findFirst: async () => ({ company: "Netshoes" }), findUnique: async () => null },
+    });
+    const app = await buildApp({ db, env, logger: false });
+    const response = await app.inject({
+      method: "POST",
+      url: "/me/accounts",
+      headers: auth,
+      payload: { domain: "https://www.Netshoes.com.br/login" },
+    });
+    assert.equal(response.statusCode, 201);
+    assert.equal(created[0]?.domain, "netshoes.com.br");
+    assert.equal(created[0]?.name, "Netshoes");
+    assert.equal(created[0]?.sessionId, "s1");
+    assert.equal(created[0]?.userId, "u1");
+  });
+
+  it("empresa avisou: grava empresa, mês e categorias, sem chamar o LLM", async () => {
+    const { db, created } = accountsDb();
+    const classifier: ReportClassifier = {
+      classify: async () => {
+        throw new Error("não deveria ser chamado");
+      },
+    };
+    const app = await buildApp({ db, env, logger: false, classifier });
+    const response = await app.inject({
+      method: "POST",
+      url: "/me/incidents/company-notice",
+      headers: auth,
+      payload: { company: "Loja Exemplo", occurredAt: "2026-10", dataClasses: ["email", "cpf", "email"] },
+    });
+    assert.equal(response.statusCode, 201);
+    assert.equal(created[0]?.type, "DATA_BREACH");
+    assert.equal(created[0]?.reportedCompany, "Loja Exemplo");
+    assert.deepEqual(created[0]?.reportedDataClasses, ["email", "cpf"]);
+    assert.equal((created[0]?.reportedOccurredAt as Date).toISOString(), "2026-10-01T00:00:00.000Z");
+    assert.equal(created[0]?.sessionId, "s1");
+    assert.equal(created[0]?.classifiedBy, "USER");
+  });
+
+  it("empresa avisou: só aceita categorias da lista fechada", async () => {
+    const { db } = accountsDb();
+    const app = await buildApp({ db, env, logger: false });
+    for (const dataClasses of [[], ["senha_do_banco"]]) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/me/incidents/company-notice",
+        headers: auth,
+        payload: { company: "Loja Exemplo", dataClasses },
+      });
+      assert.equal(response.statusCode, 400);
+    }
+  });
+
+  it("plano de vazamento real: abre quando o serviço está em Minhas contas", async () => {
+    const { db, created } = accountsDb({
+      breach: { findUnique: async () => ({ id: "b1", domain: "netshoes.com.br" }) },
+      exposure: { findFirst: async () => null },
+      trackedService: { findFirst: async () => ({ id: "ts1" }) },
+    });
+    const app = await buildApp({ db, env, logger: false });
+    const response = await app.inject({
+      method: "POST",
+      url: "/me/incidents/from-breach",
+      headers: auth,
+      payload: { breachId: "b1" },
+    });
+    assert.equal(response.statusCode, 201);
+    assert.equal(created[0]?.breachId, "b1");
+    assert.equal(created[0]?.source, "DETECTED");
+  });
+
+  it("plano de vazamento real: recusa vazamento de serviço que a pessoa não usa", async () => {
+    const { db } = accountsDb({
+      breach: { findUnique: async () => ({ id: "b1", domain: "netshoes.com.br" }) },
+      exposure: { findFirst: async () => null },
+    });
+    const app = await buildApp({ db, env, logger: false });
+    const response = await app.inject({
+      method: "POST",
+      url: "/me/incidents/from-breach",
+      headers: auth,
+      payload: { breachId: "b1" },
+    });
+    assert.equal(response.statusCode, 404);
+  });
+
+  it("catálogo do HIBP: a rota exige o segredo dos jobs", async () => {
+    const app = await buildApp({ db: fakeDb(), env, logger: false });
+    const response = await app.inject({ method: "POST", url: "/internal/jobs/breach-catalog" });
+    assert.equal(response.statusCode, 401);
   });
 });

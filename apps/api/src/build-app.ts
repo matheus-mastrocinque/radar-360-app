@@ -7,6 +7,7 @@ import { webOrigins, type Env } from "./config/env.js";
 import { HttpError } from "./shared/auth.js";
 import { rateLimitKey } from "./shared/client-ip.js";
 import type { Db } from "./shared/db.js";
+import { accountRoutes } from "./modules/accounts/routes.js";
 import { authRoutes } from "./modules/auth/routes.js";
 import { breachJobRoutes } from "./modules/breaches/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
@@ -60,6 +61,7 @@ export async function configureApp<T extends FastifyInstance>(
   await app.register(authRoutes, { db });
   await app.register(dashboardRoutes, { db });
   await app.register(incidentRoutes, { db, classifier });
+  await app.register(accountRoutes, { db });
   await app.register(breachJobRoutes, { db, jobsSecret: env.JOBS_SECRET });
 
   return app;

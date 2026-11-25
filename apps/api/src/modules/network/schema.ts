@@ -37,6 +37,16 @@ const findingSchema = z.object({
   port: z.number().int().min(1).max(65535).nullable(),
 });
 
+/** Correção aplicada pelo agente, com confirmação do usuário, nesta execução. */
+const fixSchema = z.object({
+  kind: z.string().max(64).regex(/^[a-z0-9_]+$/),
+  target: z.enum(["computer", "router"]),
+  title: z.string().max(200),
+  appliedAt: z.iso.datetime({ offset: true }),
+  /** Achado que a correção resolveu. */
+  findingKind: z.string().max(64).regex(/^[a-z0-9_]+$/).optional(),
+});
+
 export const scanPayloadSchema = z
   .object({
     agentVersion: z.string().max(32),
@@ -56,6 +66,7 @@ export const scanPayloadSchema = z
     }),
     devices: z.array(deviceSchema).max(256),
     findings: z.array(findingSchema).max(500),
+    fixes: z.array(fixSchema).max(50).default([]),
   })
   .refine((scan) => scan.mode === "home" || scan.devices.length === 0, {
     message: "No modo rede pública o agente não pode enviar dispositivos de terceiros",
@@ -63,4 +74,5 @@ export const scanPayloadSchema = z
   });
 
 export type ScanPayload = z.infer<typeof scanPayloadSchema>;
+export type ScanFix = z.infer<typeof fixSchema>;
 export type FindingSeverity = z.infer<typeof severitySchema>;

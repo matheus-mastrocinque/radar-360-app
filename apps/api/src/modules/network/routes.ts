@@ -35,6 +35,7 @@ export async function networkRoutes(app: FastifyInstance, opts: { db: Db }) {
             finishedAt: new Date(scan.finishedAt),
             network: scan.network,
             devices: scan.devices,
+            fixes: scan.fixes,
             findings: {
               create: scan.findings.map((finding) => ({
                 severity: SEVERITY_TO_DB[finding.severity],
@@ -64,6 +65,7 @@ export async function networkRoutes(app: FastifyInstance, opts: { db: Db }) {
         scanId: created.id,
         devices: scan.devices.length,
         findings: scan.findings.length,
+        fixes: scan.fixes.length,
         bySeverity,
       });
     },

@@ -25,6 +25,16 @@ const storedDevicesSchema = z.array(
   }),
 );
 
+const storedFixesSchema = z.array(
+  z.object({
+    kind: z.string(),
+    target: z.enum(["computer", "router"]),
+    title: z.string(),
+    appliedAt: z.string(),
+    findingKind: z.string().nullish(),
+  }),
+);
+
 function toSeverity(value: string): Severity {
   return value.toLowerCase() as Severity;
 }
@@ -42,6 +52,7 @@ type ScanWithFindings = NonNullable<Awaited<ReturnType<typeof latestScan>>>;
 function summarizeScan(scan: ScanWithFindings, scope: ScanScope) {
   const network = storedNetworkSchema.safeParse(scan.network);
   const devices = storedDevicesSchema.safeParse(scan.devices);
+  const fixes = storedFixesSchema.safeParse(scan.fixes);
 
   const findings = scan.findings
     .map((finding) => ({
@@ -81,6 +92,12 @@ function summarizeScan(scan: ScanWithFindings, scope: ScanScope) {
       : [],
     bySeverity,
     findings,
+    /** Correções que o agente aplicou nesta execução, com o OK do usuário. */
+    fixes: fixes.success
+      ? fixes.data
+          .map((fix) => ({ ...fix, findingKind: fix.findingKind ?? null }))
+          .sort((a, b) => b.appliedAt.localeCompare(a.appliedAt))
+      : [],
   };
 }
 
@@ -159,6 +176,7 @@ export async function getDashboard(db: Db, userId: string, now: Date = new Date(
       assets: assets.length,
       verifiedAssets: assets.filter((asset) => asset.verifiedAt !== null).length,
       importantNetworkAlerts,
+      fixesApplied: scans.reduce((sum, scan) => sum + scan.fixes.length, 0),
     },
     score,
     assets: assets.map((asset) => ({

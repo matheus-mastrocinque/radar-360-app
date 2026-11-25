@@ -95,9 +95,87 @@ const CATALOG: Record<string, Omit<DataClassInfo, "key" | "action"> & { action?:
     weight: 1,
     why: "Sozinho pesa pouco, mas torna os outros dados mais úteis para golpistas.",
   },
+  // Categorias que aparecem nos vazamentos reais do catálogo do Have I Been Pwned.
+  documento: {
+    label: "Documento de identidade",
+    weight: 8,
+    why: "Número de documento oficial facilita abrir contas e pedir crédito em seu nome.",
+    action: "Consulte o Registrato, do Banco Central, e fique atento a cadastros em seu nome.",
+  },
+  perguntas_seguranca: {
+    label: "Perguntas de segurança",
+    weight: 8,
+    why: "As respostas costumam valer em vários serviços e não mudam com o tempo.",
+    action: "Troque as perguntas e respostas de segurança dos serviços que ainda usam esse método.",
+  },
+  tokens: {
+    label: "Tokens de acesso",
+    weight: 8,
+    why: "Podem dar acesso à conta sem precisar da senha.",
+    action: "Encerre as sessões abertas nas configurações de segurança do serviço e troque a senha.",
+  },
+  mensagens: {
+    label: "Mensagens privadas",
+    weight: 6,
+    why: "Conversas expostas podem ser usadas para chantagem ou para golpes convincentes.",
+  },
+  dica_senha: {
+    label: "Dica de senha",
+    weight: 4,
+    why: "A dica ajuda a adivinhar a senha, principalmente se ela se repete em outros serviços.",
+    action: "Troque a senha desse serviço e de todos em que você usa a mesma.",
+  },
+  localizacao: {
+    label: "Localização",
+    weight: 3,
+    why: "Mostra onde você está ou costuma estar.",
+  },
+  fotos: {
+    label: "Fotos",
+    weight: 3,
+    why: "Imagens pessoais podem ser usadas em perfis falsos.",
+  },
+  usuario: {
+    label: "Nome de usuário",
+    weight: 2,
+    why: "Junto com o e-mail, facilita tentativas de login com senhas vazadas.",
+  },
+  ip: {
+    label: "Endereço IP",
+    weight: 2,
+    why: "Indica de onde você se conectou e ajuda a montar golpes direcionados.",
+  },
+  genero: {
+    label: "Gênero",
+    weight: 1,
+    why: "Pesa pouco sozinho, mas completa o seu perfil.",
+  },
+  profissional: {
+    label: "Dados profissionais",
+    weight: 1,
+    why: "Empregador e cargo dão credibilidade a golpes do tipo \"falso RH\".",
+  },
+  redes_sociais: {
+    label: "Perfis em redes sociais",
+    weight: 1,
+    why: "Ligam você a outras contas e facilitam golpes personalizados.",
+  },
+  dispositivo: {
+    label: "Dados do aparelho",
+    weight: 1,
+    why: "Modelo e navegador ajudam a montar ataques específicos.",
+  },
+  outros: {
+    label: "Outros dados",
+    weight: 1,
+    why: "Categorias menos comuns, reunidas num grupo só.",
+  },
 };
 
 const DEFAULT_WEIGHT = 3;
+
+/** Chaves aceitas quando o próprio usuário informa o que vazou. */
+export const DATA_CLASS_KEYS = Object.keys(CATALOG) as [string, ...string[]];
 
 export function dataClassInfo(key: string): DataClassInfo {
   const known = CATALOG[key];

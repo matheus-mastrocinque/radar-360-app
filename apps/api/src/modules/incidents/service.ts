@@ -20,22 +20,19 @@ import {
   type LgpdTimeline,
 } from "./lgpd.js";
 import { applicableSteps, buildPlan, type Plan } from "./plan.js";
+import { viewerOwner, viewerScope as scope, type Viewer } from "../../shared/viewer.js";
+import { HIBP_ATTRIBUTION } from "../breaches/hibp.js";
 
-/** Quem está olhando. Na demo, cada sessão só vê os próprios incidentes. */
-export interface Viewer {
-  userId: string;
-  sessionId: string;
-  isDemo: boolean;
-  name: string | null;
-}
+export type { Viewer } from "../../shared/viewer.js";
 
 /** Limite de relatos por hora (cada um pode chamar o LLM). */
 export const MAX_REPORTS_PER_HOUR = 20;
 
 const HOUR_MS = 60 * 60 * 1000;
 
-function scope(viewer: Viewer) {
-  return viewer.isDemo ? { userId: viewer.userId, sessionId: viewer.sessionId } : { userId: viewer.userId };
+/** Categorias do vazamento: as do catálogo ou as que o próprio usuário informou. */
+function dataClassesOf(incident: { breach: { dataClasses: string[] } | null; reportedDataClasses: string[] }) {
+  return incident.breach?.dataClasses ?? incident.reportedDataClasses;
 }
 
 function holderName(viewer: Viewer): string {
@@ -58,6 +55,8 @@ export interface IncidentListItem {
   typeLabel: string;
   title: string;
   source: "DETECTED" | "REPORTED";
+  /** De onde veio o vazamento: base da demo (seus dados) ou catálogo público (serviço que você usa). */
+  breachSource: "SYNTHETIC" | "HIBP" | null;
   createdAt: string;
   progress: { done: number; total: number };
   lgpdStatus: LgpdTimeline["status"] | null;
@@ -67,22 +66,23 @@ export async function listIncidents(db: Db, viewer: Viewer, now: Date) {
   const incidents = await db.incident.findMany({
     where: scope(viewer),
     orderBy: { createdAt: "desc" },
-    include: { breach: { select: { company: true, dataClasses: true } } },
+    include: { breach: { select: { company: true, dataClasses: true, source: true } } },
   });
 
   const items: IncidentListItem[] = incidents.map((incident) => {
     const plan = buildPlan({
       type: incident.type,
       flags: flagsOf(incident.flags),
-      dataClasses: incident.breach?.dataClasses ?? [],
+      dataClasses: dataClassesOf(incident),
       completedSteps: incident.completedSteps,
     });
     return {
       id: incident.id,
       type: incident.type,
       typeLabel: INCIDENT_TYPES[incident.type].label,
-      title: titleOf(incident.type, incident.breach?.company),
+      title: titleOf(incident.type, incident.breach?.company ?? incident.reportedCompany),
       source: incident.source,
+      breachSource: incident.breach?.source ?? null,
       createdAt: incident.createdAt.toISOString(),
       progress: plan.progress,
       lgpdStatus:
@@ -132,6 +132,18 @@ export interface IncidentView {
     disclosedAt: string | null;
     isSynthetic: boolean;
     dataClasses: DataClassInfo[];
+    source: "SYNTHETIC" | "HIBP";
+    domain: string | null;
+    pwnCount: number | null;
+    sourceUrl: string | null;
+    /** Atribuição exigida pela licença do catálogo (CC BY 4.0), só nos vazamentos do HIBP. */
+    attribution: typeof HIBP_ATTRIBUTION | null;
+  } | null;
+  /** Vazamento informado pelo usuário ("a empresa me avisou"), sem entrada no catálogo. */
+  reportedBreach: {
+    company: string;
+    occurredAt: string | null;
+    dataClasses: DataClassInfo[];
   } | null;
   plan: Plan;
   lgpd: {
@@ -153,26 +165,31 @@ export async function getIncidentView(db: Db, viewer: Viewer, id: string, now: D
   const incident = await findInScope(db, viewer, id);
   const flags = flagsOf(incident.flags);
   const breach = incident.breach;
-  const dataClasses = breach ? breach.dataClasses.map(dataClassInfo) : [];
+  const dataClasses = dataClassesOf(incident).map(dataClassInfo);
+  const company = breach?.company ?? incident.reportedCompany;
+  const occurredAt = breach ? breach.occurredAt : incident.reportedOccurredAt;
 
   let lgpd: IncidentView["lgpd"] = null;
-  if (incident.type === "DATA_BREACH" && breach) {
+  if (incident.type === "DATA_BREACH" && company) {
     const timeline = lgpdTimeline(incident.lgpdSentAt, incident.lgpdAnsweredAt, now);
     const name = holderName(viewer);
+    const privacyHint = breach?.domain
+      ? `Procure o contato do encarregado na política de privacidade de ${breach.domain}: a LGPD obriga a empresa a divulgá-lo (art. 41, § 1º).`
+      : "Procure o contato do encarregado na política de privacidade da empresa: a LGPD obriga a divulgação (art. 41, § 1º).";
     lgpd = {
       timeline,
       recipient: {
-        contact: breach.dpoContact,
-        hint: breach.isSynthetic
+        contact: breach?.dpoContact ?? null,
+        hint: breach?.isSynthetic
           ? "Empresa fictícia: na demo, o envio é simulado. Use \"Marquei como enviada\" para ver o prazo correr."
-          : breach.dpoContact
+          : breach?.dpoContact
             ? "Contato do encarregado divulgado pela empresa."
-            : "Procure o contato do encarregado na política de privacidade da empresa: a LGPD obriga a divulgação (art. 41, § 1º).",
+            : privacyHint,
       },
       notice: buildLgpdNotice({
         holderName: name,
-        company: breach.company,
-        occurredAt: breach.occurredAt,
+        company,
+        occurredAt,
         dataClassLabels: dataClasses.map((item) => item.label),
         now: incident.lgpdSentAt ?? now,
       }),
@@ -180,7 +197,7 @@ export async function getIncidentView(db: Db, viewer: Viewer, id: string, now: D
         timeline.status === "overdue" && incident.lgpdSentAt && timeline.deadline
           ? buildAnpdPetition({
               holderName: name,
-              company: breach.company,
+              company,
               sentAt: incident.lgpdSentAt,
               deadline: new Date(timeline.deadline),
             })
@@ -193,7 +210,7 @@ export async function getIncidentView(db: Db, viewer: Viewer, id: string, now: D
     type: incident.type,
     typeLabel: INCIDENT_TYPES[incident.type].label,
     typeDescription: INCIDENT_TYPES[incident.type].description,
-    title: titleOf(incident.type, breach?.company),
+    title: titleOf(incident.type, company),
     source: incident.source,
     classifiedBy: incident.classifiedBy,
     createdAt: incident.createdAt.toISOString(),
@@ -208,12 +225,25 @@ export async function getIncidentView(db: Db, viewer: Viewer, id: string, now: D
           disclosedAt: breach.disclosedAt?.toISOString() ?? null,
           isSynthetic: breach.isSynthetic,
           dataClasses,
+          source: breach.source,
+          domain: breach.domain,
+          pwnCount: breach.pwnCount,
+          sourceUrl: breach.sourceUrl,
+          attribution: breach.source === "HIBP" ? HIBP_ATTRIBUTION : null,
         }
       : null,
+    reportedBreach:
+      !breach && incident.reportedCompany
+        ? {
+            company: incident.reportedCompany,
+            occurredAt: incident.reportedOccurredAt?.toISOString() ?? null,
+            dataClasses,
+          }
+        : null,
     plan: buildPlan({
       type: incident.type,
       flags,
-      dataClasses: breach?.dataClasses ?? [],
+      dataClasses: dataClassesOf(incident),
       completedSteps: incident.completedSteps,
     }),
     lgpd,
@@ -223,21 +253,31 @@ export async function getIncidentView(db: Db, viewer: Viewer, id: string, now: D
 
 /* ------------------------------------------------------------------ escrita */
 
-/** Abre (ou reabre) o plano de resposta de um vazamento detectado. Idempotente. */
+/**
+ * Abre (ou reabre) o plano de resposta de um vazamento. Idempotente. Vale para vazamentos em que
+ * um dado verificado da pessoa apareceu, ou de um serviço que ela disse usar ("Minhas contas").
+ */
 export async function openBreachIncident(db: Db, viewer: Viewer, breachId: string) {
-  const exposure = await db.exposure.findFirst({
-    where: { breachId, asset: { userId: viewer.userId, verifiedAt: { not: null } } },
-    select: { id: true },
-  });
-  if (!exposure) throw new HttpError(404, "Vazamento não encontrado entre os seus dados");
+  const breach = await db.breach.findUnique({ where: { id: breachId }, select: { id: true, domain: true } });
+  if (!breach) throw new HttpError(404, "Vazamento não encontrado");
+
+  const [exposure, tracked] = await Promise.all([
+    db.exposure.findFirst({
+      where: { breachId, asset: { userId: viewer.userId, verifiedAt: { not: null } } },
+      select: { id: true },
+    }),
+    breach.domain
+      ? db.trackedService.findFirst({ where: { ...scope(viewer), domain: breach.domain }, select: { id: true } })
+      : Promise.resolve(null),
+  ]);
+  if (!exposure && !tracked) throw new HttpError(404, "Vazamento não encontrado entre os seus dados nem nos seus serviços");
 
   const existing = await db.incident.findFirst({ where: { breachId, ...scope(viewer) }, select: { id: true } });
   if (existing) return { id: existing.id, created: false };
 
   const incident = await db.incident.create({
     data: {
-      userId: viewer.userId,
-      sessionId: viewer.isDemo ? viewer.sessionId : null,
+      ...viewerOwner(viewer),
       type: "DATA_BREACH",
       source: "DETECTED",
       classifiedBy: "SYSTEM",
@@ -265,11 +305,36 @@ export async function assertReportQuota(db: Db, viewer: Viewer, now: Date) {
   }
 }
 
+export interface CompanyNotice {
+  company: string;
+  /** Mês em que o vazamento ocorreu, se a empresa informou. */
+  occurredAt: Date | null;
+  /** Categorias que a empresa disse terem vazado (chaves da tabela curada). */
+  dataClasses: string[];
+}
+
+/** "Uma empresa me avisou que vazou meus dados": abre o plano com a notificação LGPD pronta. */
+export async function createCompanyNoticeIncident(db: Db, viewer: Viewer, notice: CompanyNotice) {
+  const incident = await db.incident.create({
+    data: {
+      ...viewerOwner(viewer),
+      type: "DATA_BREACH",
+      source: "REPORTED",
+      classifiedBy: "USER",
+      reportedCompany: notice.company,
+      reportedOccurredAt: notice.occurredAt,
+      reportedDataClasses: [...new Set(notice.dataClasses)],
+      summary: `Você foi avisado de um vazamento na ${notice.company}.`,
+    },
+    select: { id: true },
+  });
+  return { id: incident.id };
+}
+
 export async function createReportedIncident(db: Db, viewer: Viewer, report: NewReport) {
   const incident = await db.incident.create({
     data: {
-      userId: viewer.userId,
-      sessionId: viewer.isDemo ? viewer.sessionId : null,
+      ...viewerOwner(viewer),
       type: report.type,
       source: "REPORTED",
       classifiedBy: report.classifiedBy,
@@ -287,7 +352,7 @@ export async function setStepDone(db: Db, viewer: Viewer, id: string, stepId: st
   const steps = applicableSteps({
     type: incident.type,
     flags: flagsOf(incident.flags),
-    dataClasses: incident.breach?.dataClasses ?? [],
+    dataClasses: dataClassesOf(incident),
   });
   if (!steps.some((step) => step.id === stepId)) throw new HttpError(400, "Passo inválido para este incidente");
 

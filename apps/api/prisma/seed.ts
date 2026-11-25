@@ -18,6 +18,7 @@ import {
   normalizeIdentifier,
 } from "../src/shared/crypto.js";
 import { runBreachCheck } from "../src/modules/breaches/job.js";
+import { importHibpCatalog } from "../src/modules/breaches/hibp.js";
 
 const env = loadEnv();
 const db = createDb(env.DATABASE_URL);
@@ -110,6 +111,17 @@ const DEMO_SCANS: Array<Omit<Prisma.NetworkScanCreateInput, "user">> = [
       { ip: "192.168.0.40", mac: "02:00:5e:10:00:40", vendor: null, hostname: "impressora", model: "Impressora multifuncional", openPorts: [631, 9100], services: [] },
       { ip: "192.168.0.57", mac: "02:00:5e:10:00:57", vendor: null, hostname: null, model: null, openPorts: [], services: [] },
     ],
+    // Correção que a persona aceitou no agente: o Telnet e o painel continuam (exigem o painel do
+    // roteador), mas a porta que um app abriu para a Internet via UPnP foi fechada.
+    fixes: [
+      {
+        kind: "upnp_mapping_removed",
+        target: "router",
+        title: "Porta 3389 (Área de Trabalho Remota) fechada para a Internet no roteador, via UPnP",
+        appliedAt: new Date(hoursAgo(26).getTime() + 52_000).toISOString(),
+        findingKind: "upnp_port_mapping",
+      },
+    ],
     findings: {
       create: [
         {
@@ -193,6 +205,23 @@ const DEMO_SCANS: Array<Omit<Prisma.NetworkScanCreateInput, "user">> = [
       wifiSecurity: "WPA2-Personal",
     },
     devices: [],
+    // Correções que a persona aceitou, uma a uma, no Wi-Fi do café.
+    fixes: [
+      {
+        kind: "firewall_enabled",
+        target: "computer",
+        title: "Firewall ativado no perfil Público",
+        appliedAt: new Date(hoursAgo(74).getTime() + 9_000).toISOString(),
+        findingKind: "firewall_disabled",
+      },
+      {
+        kind: "network_set_public",
+        target: "computer",
+        title: "Wi-Fi do café passou para o perfil de rede Público",
+        appliedAt: new Date(hoursAgo(74).getTime() + 11_000).toISOString(),
+        findingKind: "network_marked_private",
+      },
+    ],
     findings: {
       create: [
         {
@@ -340,7 +369,18 @@ async function main() {
     await db.networkScan.create({ data: { ...scan, user: { connect: { id: user.id } } } });
   }
 
+  // Vazamentos reais (só metadados) do catálogo público do HIBP. Sem internet, o seed segue sem eles.
+  let catalog: Awaited<ReturnType<typeof importHibpCatalog>> | null = null;
+  try {
+    catalog = await importHibpCatalog(db);
+  } catch (error) {
+    console.warn(`  Catálogo do HIBP não importado: ${(error as Error).message}`);
+  }
+
   console.log("Seed concluído (dados sintéticos).");
+  if (catalog) {
+    console.log(`  Catálogo HIBP: ${catalog.created} novos, ${catalog.updated} atualizados, ${catalog.skipped} ignorados`);
+  }
   console.log(`  Persona: ${PERSONA.email}`);
   console.log(`  Vazamentos sintéticos: ${BREACHES.length}`);
   console.log(`  Exposições novas da persona: ${check.newExposures.length}`);

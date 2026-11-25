@@ -2,7 +2,7 @@
  * Notificação LGPD ao encarregado e petição à ANPD.
  *
  * Os textos são modelos fixos, com artigos da tabela curada: o LLM não escreve nada aqui.
- * Campos que o Radar360 não guarda em texto claro (CPF, e-mail) ficam entre colchetes para o
+ * Campos que o Olharium não guarda em texto claro (CPF, e-mail) ficam entre colchetes para o
  * próprio titular preencher antes de enviar.
  */
 import {
@@ -59,7 +59,8 @@ function articles(ids: LgpdArticleId[]) {
 export interface NoticeInput {
   holderName: string;
   company: string;
-  occurredAt: Date;
+  /** Null quando a empresa não informou a data. */
+  occurredAt: Date | null;
   dataClassLabels: string[];
   now: Date;
 }
@@ -75,10 +76,12 @@ export function buildLgpdNotice({ holderName, company, occurredAt, dataClassLabe
   const categories = dataClassLabels
     .map((label) => (label === label.toUpperCase() ? label : label.charAt(0).toLowerCase() + label.slice(1)))
     .join(", ");
+  const when = occurredAt ? `, ocorrido em ${monthFormat.format(occurredAt)}` : "";
+  const what = categories ? `, que expôs dados como: ${categories}` : ", que pode ter exposto meus dados pessoais";
   const body = [
     `Ao(À) Encarregado(a) pelo Tratamento de Dados Pessoais da ${company},`,
     "",
-    `Eu, ${holderName}, titular de dados pessoais, tomei conhecimento de um incidente de segurança na ${company}, ocorrido em ${monthFormat.format(occurredAt)}, que expôs dados como: ${categories}.`,
+    `Eu, ${holderName}, titular de dados pessoais, tomei conhecimento de um incidente de segurança na ${company}${when}${what}.`,
     "",
     "Com base na Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018), solicito:",
     "",

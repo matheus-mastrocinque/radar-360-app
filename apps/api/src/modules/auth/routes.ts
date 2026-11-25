@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Db } from "../../shared/db.js";
 import { HttpError, requireSession } from "../../shared/auth.js";
 import { generateSessionToken, hashToken } from "../../shared/crypto.js";
+import { createDemoAccounts } from "../accounts/service.js";
 import { createDemoIncidents } from "../incidents/demo.js";
 
 /** Sessão da demo dura 2 horas: suficiente para o júri navegar, curta o bastante para não acumular. */
@@ -35,6 +36,7 @@ export async function authRoutes(app: FastifyInstance, opts: { db: Db }) {
         select: { id: true },
       });
       await createDemoIncidents(db, { userId: demo.id, sessionId: session.id }, now);
+      await createDemoAccounts(db, { userId: demo.id, sessionId: session.id });
 
       return reply.code(201).send({ token, expiresAt: expiresAt.toISOString() });
     },

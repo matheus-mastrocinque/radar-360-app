@@ -1,4 +1,4 @@
-// Modelo de dados do Radar360.
+// Modelo de dados do Olharium.
 // Regra: identificadores (e-mail monitorado, CPF, telefone) são guardados só como HMAC-SHA256
 // (chave HMAC_SECRET fora do banco) e numa versão mascarada para exibição. Nunca em texto claro.
 
@@ -49,6 +49,13 @@ enum IncidentSource {
   REPORTED
 }
 
+/// Origem de um vazamento: a base fictícia da demo ou o catálogo público do Have I Been Pwned
+/// (só metadados: empresa, data, categorias e número de contas, nunca dado pessoal).
+enum BreachSource {
+  SYNTHETIC
+  HIBP
+}
+
 /// Quem definiu o tipo do incidente.
 enum ClassifiedBy {
   SYSTEM
@@ -64,11 +71,12 @@ model User {
   isDemo    Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  assets        Asset[]
-  pairingTokens PairingToken[]
-  networkScans  NetworkScan[]
-  sessions      Session[]
-  incidents     Incident[]
+  assets          Asset[]
+  pairingTokens   PairingToken[]
+  networkScans    NetworkScan[]
+  sessions        Session[]
+  incidents       Incident[]
+  trackedServices TrackedService[]
 }
 
 /// Identificador que o usuário monitora. Só entra no monitoramento depois de verificado.
@@ -89,10 +97,11 @@ model Asset {
   @@index([userId])
 }
 
-/// Incidente de vazamento. Na demo, sempre sintético; incidentes reais só como metadados.
+/// Incidente de vazamento. Os da base sintética têm registros (HMAC) para o cruzamento da demo;
+/// os reais, do catálogo do HIBP, são só metadados e cruzam com "Minhas contas" pelo domínio.
 model Breach {
-  id          String    @id @default(cuid())
-  slug        String    @unique
+  id          String       @id @default(cuid())
+  slug        String       @unique
   company     String
   occurredAt  DateTime
   disclosedAt DateTime?
@@ -102,12 +111,21 @@ model Breach {
   sourceUrl   String?
   /// Contato público do encarregado (DPO) da empresa (LGPD, art. 41, § 1º).
   dpoContact  String?
-  isSynthetic Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  isSynthetic Boolean      @default(true)
+  source      BreachSource @default(SYNTHETIC)
+  /// Identificador no catálogo de origem (o "Name" do HIBP). Só nos vazamentos reais.
+  externalId  String?      @unique
+  /// Domínio do serviço vazado, para cruzar com os serviços que o usuário usa.
+  domain      String?
+  /// Contas afetadas, segundo a fonte.
+  pwnCount    Int?
+  createdAt   DateTime     @default(now())
 
   records   BreachRecord[]
   exposures Exposure[]
   incidents Incident[]
+
+  @@index([domain])
 }
 
 /// Identificador presente num vazamento, guardado apenas como HMAC.
@@ -156,10 +174,29 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  incidents Incident[]
+  incidents       Incident[]
+  trackedServices TrackedService[]
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// Serviço que o usuário declarou usar ("Minhas contas"). Guarda só nome e domínio: nunca login
+/// nem senha. Na demo, pertence à sessão e some junto com ela.
+model TrackedService {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId    String?
+  session      Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  domain       String
+  name         String
+  hasTwoFactor Boolean  @default(false)
+  isFinancial  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, domain])
+  @@index([sessionId])
 }
 
 model NetworkScan {
@@ -175,6 +212,8 @@ model NetworkScan {
   network      Json
   /// Dispositivos encontrados (só no modo casa)
   devices      Json
+  /// Correções aplicadas pelo agente nesta execução, cada uma confirmada pelo usuário.
+  fixes        Json     @default("[]")
   createdAt    DateTime @default(now())
 
   findings NetworkFinding[]
@@ -218,6 +257,10 @@ model Incident {
   flags          String[]       @default([])
   /// Ids dos passos do plano já concluídos.
   completedSteps String[]       @default([])
+  /// Vazamento informado pelo próprio usuário ("a empresa me avisou"), quando não há entrada no catálogo.
+  reportedCompany     String?
+  reportedOccurredAt  DateTime?
+  reportedDataClasses String[]  @default([])
   /// Notificação LGPD ao encarregado: enviada em / respondida em.
   lgpdSentAt     DateTime?
   lgpdAnsweredAt DateTime?

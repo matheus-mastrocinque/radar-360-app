@@ -285,7 +285,7 @@ const DATA_BREACH_STEPS: StepDef[] = [
     id: "breach_follow_answer",
     phase: "day",
     title: "Acompanhe a resposta da empresa",
-    detail: "Marque aqui quando enviar a notificação. Se passar de 15 dias sem resposta, o Radar360 prepara a petição à ANPD.",
+    detail: "Marque aqui quando enviar a notificação. Se passar de 15 dias sem resposta, o Olharium prepara a petição à ANPD.",
     lgpd: true,
   },
 ];
