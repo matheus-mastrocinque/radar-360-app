@@ -86,7 +86,7 @@ export function buildLgpdNotice({ holderName, company, occurredAt, dataClassLabe
     "Com base na Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018), solicito:",
     "",
     "1. a confirmação de que meus dados pessoais foram afetados e de quais categorias foram expostas (art. 18, I e II);",
-    "2. a descrição do incidente, dos riscos envolvidos e das medidas adotadas para reverter ou reduzir seus efeitos (art. 48);",
+    "2. a descrição do incidente, dos riscos envolvidos e das medidas adotadas para reverter ou reduzir seus efeitos, e se o incidente foi comunicado à ANPD e aos titulares (art. 48 e Resolução CD/ANPD nº 15/2024);",
     "3. a informação das entidades públicas e privadas com as quais meus dados foram compartilhados (art. 18, VII);",
     "4. a indicação de outras medidas que eu deva tomar para me proteger.",
     "",
@@ -147,7 +147,9 @@ export function buildAnpdPetition({ holderName, company, sentAt, deadline }: Pet
     checklist: [
       "Entre no serviço da ANPD com a sua conta gov.br (nível prata ou ouro).",
       "Escolha \"Petição de titular\" e cole o texto acima.",
-      "Anexe o comprovante do envio à empresa (o e-mail enviado ou o protocolo).",
+      "Anexe o comprovante do envio à empresa (o e-mail enviado ou o protocolo). Sem comprovante, a ANPD aceita a sua autodeclaração (Resolução CD/ANPD nº 1/2021, art. 25, § 1º).",
+      "Os 15 dias são o prazo da empresa na LGPD (art. 19, II). A ANPD pode pedir uma espera maior antes de aceitar a petição: se o serviço recusar agora, aguarde e use este mesmo texto.",
+      "A ANPD analisa as petições em conjunto, para orientar a fiscalização. Ela não garante uma resposta individual ao seu caso.",
     ],
   };
 }
