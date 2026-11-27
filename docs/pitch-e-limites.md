@@ -10,10 +10,11 @@ Pesquisa feita em 25/11/2026 para o Hack Brasil 2026, Trilha 06 (Cibersegurança
 
 > **Não é parecer jurídico.** As seções 3 e 5 citam leis para orientar decisões de produto. Para uma dúvida concreta, falem com um advogado ou com a Comissão do Hack Brasil (oi@hackbrasil.com).
 
-> **Atualização da noite de 25/11.** Depois desta pesquisa, o produto mudou em três pontos. Onde este documento disser o contrário, valem estes:
+> **Atualizações de 25 e 27/11.** Depois desta pesquisa, o produto mudou em quatro pontos. Onde este documento disser o contrário, valem estes:
 > 1. **Vazamentos reais:** "Minhas contas" mostra os vazamentos verificados do catálogo público do HIBP para os serviços que a pessoa usa (só metadados). O monitoramento deixou de ser só fictício.
 > 2. **Notificação LGPD para qualquer pessoa:** ela sai também para vazamentos reais e para o caso "uma empresa me avisou".
 > 3. **O agente corrige, com o OK da pessoa:** a regra 1 do `CLAUDE.md` mudou. O agente liga o firewall, muda o perfil de rede, desliga o compartilhamento e o RDP, bloqueia portas e fecha portas UPnP no próprio roteador, sempre com confirmação a cada ação e com "desfazer".
+> 4. **Em 27/11:** entraram o kit MED no plano do golpe do Pix, a trava do roteador (`MEU ROTEADOR`, e nada no roteador em Wi-Fi aberto ou corporativo) e as ressalvas da petição à ANPD (veja "Decisões de 27/11" no `STATUS.md`).
 >
 > O checklist atualizado está em [FUNCIONALIDADES.md](FUNCIONALIDADES.md).
 

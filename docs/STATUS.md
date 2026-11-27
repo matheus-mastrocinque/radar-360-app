@@ -75,7 +75,13 @@ A produção roda o código do `4488f6d`: o site foi publicado de novo em 25/11 
 ### Web (`apps/web`)
 
 - **Landing:** tem o botão "Entrar como demo".
-- **Painel `/painel` (central de comando):** tudo numa tela. Faixa de números, score, **mapa de exposição** (você no centro, seus dados, redes e contas ao redor, e o que ameaça cada um na borda), **fila de ação** (ordenada pelo peso no score), agente local e linha do tempo. Qualquer ponto abre uma **gaveta de detalhes** (`<dialog>` nativo) com o detalhe completo e o botão "Plano de resposta"; dentro dela, os links empilham com "Voltar".
+- **Painel `/painel` (central de comando):** em 5 segundos, qual é o risco e o que fazer primeiro; o resto fica a um clique (revisão de UX de 27/11). São 4 módulos:
+  1. **Score compacto**, com o selo do nível e as barras Vazamentos e Rede;
+  2. **Fila de ação**, com a 1ª ação aberta ("Comece por aqui", quanto pesa no score e "Ver como resolver") e as outras em uma linha cada;
+  3. **Mapa de exposição** (você no centro, seus dados, redes e contas ao redor, e o que ameaça cada um na borda), com o resumo de 4 números no rodapé (Vazamentos, Contas, Alertas de rede, Correções do agente). É o único destaque de HUD da tela;
+  4. **Linha do tempo** abaixo da dobra, com os 4 eventos mais recentes e "Ver os N eventos".
+
+  Os dados vigiados abrem pelo link do cabeçalho e pelo nó "Você". Qualquer ponto abre uma **gaveta de detalhes** (`<dialog>` nativo) com o detalhe completo e o botão "Plano de resposta"; dentro dela, os links empilham com "Voltar".
   - Código em `components/cockpit/`: `model.ts` monta a fila, a linha do tempo e o layout do mapa (determinístico, sem IA); `details.tsx` monta os painéis da gaveta por chave (`breach:<id>`, `finding:<id>`, `device:<ip>`, `service:<id>`...); `inspector.tsx` é a gaveta.
   - O mapa tem dois desenhos: largo (`MAP_WIDE`) e alto para o celular (`MAP_TALL`).
   - `AGENT_FIXABLE_KINDS` em `model.ts` precisa bater com `FIXABLE_FINDING_KINDS` do `scanner.py`: é o que decide se a gaveta diz "o agente corrige isso" ou "correção manual".
@@ -88,7 +94,8 @@ A produção roda o código do `4488f6d`: o site foi publicado de novo em 25/11 
 ### Agente local (`packages/local-agent`)
 
 - `scanner.py` usa só a biblioteca padrão e tem dois modos: casa e rede pública. Segue todas as travas do `CLAUDE.md`.
-- Tem 68 testes passando. O contrato com a API está no `README.md` do agente.
+- Tem 141 testes passando. O contrato com a API está no `README.md` do agente.
+- **Trava do roteador:** antes de qualquer correção no roteador, o agente mostra o IP e o MAC do gateway e pede `MEU ROTEADOR`; em Wi-Fi aberto ou corporativo (Enterprise/802.1X), nem oferece correção no roteador (`router_fix_block_reason` e `confirm_router_owner` em `scanner.py`). Motivo: o `SIM` do modo casa não distingue a sua casa de um café, e alterar o roteador alheio pode cair no art. 154-A do Código Penal.
 
 ## O que falta, por prioridade
 
@@ -100,14 +107,14 @@ A produção roda o código do `4488f6d`: o site foi publicado de novo em 25/11 
    Esse é o núcleo 1 e a regra 2 do `CLAUDE.md`.
 3. **Alerta por e-mail só para risco novo,** via Resend com `RESEND_API_KEY`. O job já devolve `newExposures`; falta mandar o e-mail para essas exposições. Sem a chave, o job só registra no log e segue.
 4. **Gemini ao vivo.** Ponha `GEMINI_API_KEY` no `.env` local e, em produção, com `npx vercel env add GEMINI_API_KEY production` na pasta ligada à API. Depois publique a API de novo e teste um relato. Sem a chave, o copiloto classifica por palavras-chave, e já funciona assim.
-5. **Agente local contra a produção.** Ainda não foi testado. Rode `scanner.py --mode home --api https://radar360-api-hazel.vercel.app --token <token de produção>` na nossa rede e confira a auditoria no painel. Isso já serve de ensaio para o vídeo.
+5. **Agente enviando ao painel: só no ambiente local.** **Não envie auditoria real para a API de produção.** As auditorias pertencem à persona da demo e o painel mostra a mais recente, então todo jurado passaria a ver a nossa rede no lugar das auditorias de exemplo. Teste o envio com a API local (`--api http://localhost:3333` e o token do `db:seed` local) e grave o vídeo assim. O passo a passo está no teste 5.5 de [`ROTEIRO-DE-TESTE.md`](ROTEIRO-DE-TESTE.md).
 6. **Vídeo** (29/11). Mostre o agente rodando na nossa própria rede, já que o júri não roda o agente, e depois o fluxo da demo: painel, vazamento, plano, LGPD e relato.
 7. **README final:** o link da demo já está lá; faltam prints e a revisão final.
 8. **Texto da submissão:** nome, frase curta e descrição. Assim que o vídeo existir, enviem uma primeira versão de garantia: vale a última versão enviada até 30/11 às 23h59.
 9. **Versões leves:** o inventário de contas já entrou, como "Minhas contas". Falta a leitura de termos, só se os itens 1 a 3 estiverem prontos até 26/11.
-10. **Testar as correções do agente de verdade.** `scanner.py --corrigir` (com `--simular` e `--desfazer`) já existe, com 138 testes, mas os comandos de mudança e o UPnP só foram exercitados com mocks. Antes do vídeo, rodem num computador e num roteador de vocês: `--mode public --corrigir` num terminal de administrador e `--mode home --corrigir` na rede de casa. Muitos roteadores só deixam fechar portas abertas pelo próprio aparelho (erros 606/718), e o agente explica isso.
+10. **Testar as correções do agente de verdade.** `scanner.py --corrigir` (com `--simular` e `--desfazer`) já existe, com 141 testes, mas os comandos de mudança e o UPnP só foram exercitados com mocks. Antes do vídeo, rodem num computador e num roteador de vocês: `--mode public --corrigir` num terminal de administrador e `--mode home --corrigir` na rede de casa. Muitos roteadores só deixam fechar portas abertas pelo próprio aparelho (erros 606/718), e o agente explica isso.
 
-Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perguntando sobre o scanner já foi enviado.
+**E-mail à Comissão (oi@hackbrasil.com):** o rascunho antigo descrevia um agente que só audita. Como agora ele corrige o próprio computador e o próprio roteador, mandem a versão nova da seção "Decisões de 27/11" abaixo, mesmo que a antiga já tenha ido.
 
 **Divisão sugerida (a combinar):** o item 1 é do Matheus. Os itens 2 e 3 (cadastro e alertas) são o maior bloco de código e cabem em quem pegar API e worker. O resto se divide entre os dois.
 
@@ -118,6 +125,9 @@ Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perg
 - **A IA só classifica.** Ela escolhe o tipo e os sinais em listas fechadas e escreve um resumo curto. Passos, links oficiais e artigos da LGPD vêm de `catalog.ts`. Se o usuário escolhe o tipo, a IA nem é chamada.
 - **O relato é limpo antes de tudo.** `redact.ts` tira CPF, cartão, telefone, e-mail e chave Pix antes de salvar o relato e antes de mandá-lo à IA.
 - **A notificação LGPD e a petição à ANPD são modelos fixos** (`lgpd.ts`). CPF e e-mail aparecem como `[preencha]`, porque o sistema só os guarda como HMAC. O prazo é de 15 dias corridos (art. 19, II).
+  - **Por que a petição sai no dia 15, com ressalvas:** o art. 19, II, dá 15 dias à empresa, então no dia 15 ela já está em falta. A ANPD, porém, não fixa esse número para aceitar a petição: a Resolução CD/ANPD nº 1/2021 (art. 25, § 1º) fala só em pedido "não solucionado no prazo estabelecido em regulamentação", e o formulário dela pode pedir uma espera maior. Por isso o checklist da petição avisa que a ANPD pode pedir mais tempo, que vale a autodeclaração quando não há comprovante e que a ANPD analisa as petições em conjunto (art. 26), sem garantir resposta individual.
+  - A notificação também pergunta se a empresa comunicou o incidente à ANPD e aos titulares (art. 48 e Resolução CD/ANPD nº 15/2024, que dá 3 dias úteis quando há risco relevante).
+- **Kit MED** (`lib/med.ts` e `components/copilot/med-kit.tsx`): no plano do golpe do Pix, um texto pronto para pedir ao banco a devolução pelo Mecanismo Especial de Devolução. O que a pessoa digita fica só no navegador. O texto diz o prazo de 80 dias da transferência e que a devolução não é garantida (depende de haver saldo na conta de quem recebeu).
 - **Limites de uso:**
   - relato: 6 por minuto por IP e 20 por hora por usuário ou sessão;
   - leituras: 60 por minuto;
@@ -125,6 +135,34 @@ Confirmem também entre vocês se o e-mail à Comissão (oi@hackbrasil.com) perg
 - **Modelo do Gemini:** o padrão é `gemini-3.5-flash-lite` e pode ser trocado com `GEMINI_MODEL`.
 - **Vazamento de serviço não é exposição confirmada.** Quando um serviço de "Minhas contas" teve vazamento, não sabemos se a conta da pessoa estava nele. Por isso a tela diz "o serviço teve um vazamento", e a notificação LGPD pede à empresa que confirme (art. 18, I e II). Esses vazamentos não entram no score; só as exposições confirmadas por HMAC entram.
 - **Quem pode abrir plano de um vazamento:** quem tem um dado verificado exposto nele, ou quem marcou o serviço (mesmo domínio) em "Minhas contas". Qualquer outro caso devolve 404.
+
+## Decisões de 27/11 (grill do projeto)
+
+Revisão do projeto contra o regulamento e a lei, feita em 26 e 27/11. Cada decisão traz o motivo.
+
+| # | Decisão | Motivo |
+| --- | --- | --- |
+| 1 | Até 28/11 entram só correções e o kit MED. Nenhuma outra feature. | Execução técnica e comunicação valem metade da nota e eram os pontos frágeis. |
+| 2 | A petição à ANPD continua no dia 15, com as ressalvas no checklist. | É o prazo da LGPD; a ressalva cobre o caso de a ANPD pedir espera maior. |
+| 3 | Trava do roteador: `MEU ROTEADOR` e recusa em Wi-Fi aberto ou corporativo. | O `SIM` não distingue casa de café; alterar roteador alheio é arriscado (CP, art. 154-A). |
+| 4 | Reenviar a consulta à Comissão com a capacidade de corrigir (texto abaixo). | O rascunho antigo descrevia um agente que só audita (regulamento 5.2). |
+| 5 | O agente se apresenta como Olharium. Os endereços `radar360-*` ficam até a final. | O vídeo mostra o agente; trocar domínio agora traria risco à demo. |
+| 6 | O agente é assumido como "versão técnica" (linha de comando). O instalador fica para depois da final. | Empacotar e assinar um executável não cabe até 30/11; no pitch, dizer isso com clareza. |
+| 7 | Gravar o vídeo em 28/11, com uma versão de garantia, no ambiente local (agente → painel local). | O vídeo vale 25% da nota e não pode depender de mandar auditoria real à produção. |
+| 8 | Na final, no Wi-Fi do evento, só `--mode public`; o modo casa só no hotspot do celular de vocês. | A rede do evento não é nossa (regulamento 5.2 e 6.9). |
+
+**Texto para a Comissão (oi@hackbrasil.com):**
+
+> Assunto: Trilha 06 – consulta sobre agente local que corrige o próprio computador e o próprio roteador (projeto Olharium)
+>
+> Olá! Somos a dupla do Olharium, na Trilha 06. Nosso projeto tem um agente local, em Python, que a pessoa roda no próprio computador:
+> 1. no modo "rede pública", ele audita só o próprio computador (firewall, portas abertas, perfil de rede) e não envia nenhum pacote a outros aparelhos;
+> 2. no modo "casa", só depois de a pessoa confirmar que a rede é dela, ele varre a própria sub-rede privada (no máximo 254 endereços), sem login, senha, força bruta ou exploit;
+> 3. com a opção de corrigir, ele aplica correções no próprio computador (liga o firewall, muda o perfil de rede, desliga o compartilhamento e a Área de Trabalho Remota, bloqueia uma porta) e fecha portas abertas pelo UPnP no próprio roteador. Cada correção é uma ação por vez, com confirmação explícita e opção de desfazer. Antes de mexer no roteador, ele pede uma segunda confirmação de que o roteador é da pessoa e recusa Wi-Fi aberto ou corporativo.
+>
+> Na demo e no vídeo usamos só a nossa própria rede e os nossos computadores. Entendemos que isso se enquadra no item 5.2 (finalidade defensiva, em sistemas próprios). Podem confirmar?
+
+**Na final, no Wi-Fi do evento:** rodar `python scanner.py --mode public` com o nosso `npm run dev` aberto (o Next abre a porta 3000 para a rede por padrão), mostrar a porta exposta, corrigir com `--corrigir` (bloqueia a porta e passa a rede para Pública), mostrar no painel local e desfazer no fim. Frase: "Quantos aqui estão com o `npm run dev` aberto para a rede do evento? O Olharium viu o nosso e fechou, com o nosso OK, sem encostar em nenhum outro aparelho."
 
 ## Produção
 

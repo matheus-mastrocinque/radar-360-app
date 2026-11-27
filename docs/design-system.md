@@ -70,6 +70,7 @@ Badge de estado:   rounded-full px-2 py-px font-mono text-[11px] uppercase track
 - **Campos:** `h-9 rounded-md border border-input bg-ink px-3 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40`.
 - **Chips de seleção** (radio/checkbox `sr-only`): estado marcado `bg-crimson/15 text-foreground ring-crimson/50`; desmarcado `bg-ink ring-white/10 hover:bg-muted`.
 - **Módulo da central de comando:** `<Panel>` (`components/cockpit/panel.tsx`), não `<Card>`. Barra de título técnica com índice e rótulo em mono (`01 | SCORE DE EXPOSIÇÃO`) e um indicador curto à direita; corpo denso, sem parágrafo de descrição. A explicação vai para a gaveta.
+- **Divulgação progressiva no painel:** na primeira dobra, só o veredito, o score, a 1ª ação inteira e o mapa. Um número aparece uma vez só (sem repetir "Risco alto" ou as correções em vários blocos), e cada tela tem um único destaque de HUD animado.
 - **Gaveta de detalhes:** `InspectorProvider` + `InspectTrigger` (`components/cockpit/inspector.tsx`). Tudo que é clicável no painel abre um painel por chave; o detalhe nunca exige trocar de página.
 - **Categorias de dado vazado:** chips neutros `bg-muted text-foreground ring-1 ring-white/10`; peso alto (≥ 10) com `ring-danger/40 text-danger`.
 

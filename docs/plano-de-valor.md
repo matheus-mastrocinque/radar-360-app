@@ -1,6 +1,6 @@
 # Plano de valor: o que o Olharium entrega de verdade
 
-Atualizado em 25/11/2026. Complementa o [pitch-e-limites.md](pitch-e-limites.md), que lista o que o app faz hoje e o que a lei e o regulamento permitem.
+Atualizado em 27/11/2026. Complementa o [pitch-e-limites.md](pitch-e-limites.md), que lista o que o app faz hoje e o que a lei e o regulamento permitem.
 
 ## A tese
 
@@ -69,15 +69,15 @@ O repositório fica congelado de 30/11 até a final, mas na final os times conti
 | Varrer redes ou aparelhos alheios | Regulamento 5.2, 6.8 e 6.9; Código Penal, art. 154-A | "Vigiamos só o que é seu, e isso é uma escolha de projeto." |
 | Usar, comprar ou mostrar base vazada | LGPD; regulamento 6.9; risco de doxxing | "Mostramos onde e quando, nunca o dado." |
 | Pedir senha, nem para checar se vazou | Regra 5 do projeto | "Senha a gente não pede. Indicamos o gerenciador de senhas." |
-| Alterar o sistema sozinho | Segurança e confiança do usuário | "Levamos você até a tela certa; quem decide é você." |
+| Alterar o sistema sozinho | Segurança e confiança do usuário | "O agente corrige com o seu OK, uma ação por vez, e sabe desfazer. Quem decide é você." |
 | Prometer devolução de dinheiro | O MED depende do banco | "Mostramos como pedir nos primeiros minutos." |
 
 ## Roteiro do pitch e do vídeo (cerca de 2 min)
 
-1. **A dor (15 s):** "Seus dados vazaram, ou você caiu num golpe. E agora?" O Google encerrou o relatório da dark web em 2026 porque ele não dizia o que fazer.
+1. **A dor (15 s):** "Seus dados vazaram, ou você caiu num golpe. E agora?" O Google encerrou o relatório da dark web em 2026 porque ele não dizia o que fazer. Abrir na central de comando: score, mapa de exposição e fila de ação.
 2. **Vazamento real (40 s):** entrar como demo, marcar Netshoes e Catho em Minhas contas, ver os vazamentos reais (via HIBP), abrir o plano, gerar a notificação LGPD com o prazo de 15 dias e a petição à ANPD.
 3. **Golpe (30 s):** relato livre "caí num golpe do Pix", plano de 15 min, 1 h e 24 h, com o texto do pedido MED pronto.
-4. **Rede (20 s):** o agente rodando na nossa casa e o atalho para corrigir.
+4. **Rede (20 s):** o agente rodando na nossa rede, corrigindo com o nosso `SIM` (e o `MEU ROTEADOR` antes de mexer no roteador), e a correção aparecendo no painel. Gravar no ambiente local, nunca enviando auditoria real à produção.
 5. **Fecho (15 s):** "O motor é real e as fontes são plugáveis. Na final, ligamos a busca por e-mail, o Firecrawl e o SMS."
 
 ## Fontes

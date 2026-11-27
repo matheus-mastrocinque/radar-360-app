@@ -1,6 +1,6 @@
 # Olharium: funcionalidades e o que fecha a demo
 
-Checklist simplificado para a dupla. Atualizado em 25/11/2026.
+Checklist simplificado para a dupla. Atualizado em 26/11/2026. Para testar cada item à mão, use [`ROTEIRO-DE-TESTE.md`](ROTEIRO-DE-TESTE.md).
 
 **Legenda:**
 - ✅ **pronto e testado**
@@ -40,7 +40,8 @@ Checklist simplificado para a dupla. Atualizado em 25/11/2026.
 - [x] ✅ **Notificação LGPD** ao encarregado: o app conta o prazo de 15 dias e, sem resposta, entrega a **petição à ANPD** pronta, com o passo a passo no gov.br
 - [x] ✅ Playbook **"celular roubado"** (Celular Seguro, bancos, operadora, IMEI, boletim de ocorrência)
 - [x] 🟡 Classificação do relato pela IA (Gemini): o código está pronto, mas sem chave a classificação é feita por palavras-chave, que já funcionam
-- [ ] ⬜ Lembrete do prazo de 15 dias na agenda (`.ics`) e texto pronto do pedido de devolução do Pix (MED) ao banco
+- [x] ✅ **Kit MED** no plano do golpe do Pix: onde pedir a devolução e o texto pronto para o banco (o que a pessoa digita fica só no navegador)
+- [ ] ⬜ Lembrete do prazo de 15 dias na agenda (`.ics`)
 
 ## 4. Agente local: "proteger e corrigir o meu computador e a minha rede"
 
@@ -51,11 +52,11 @@ Checklist simplificado para a dupla. Atualizado em 25/11/2026.
   - passa o Wi-Fi para o perfil Público;
   - desliga o compartilhamento de arquivos e a Área de Trabalho Remota;
   - bloqueia uma porta exposta;
-  - **fecha portas abertas para a internet no roteador (UPnP)**.
+  - **fecha portas abertas para a internet no roteador (UPnP)**, só depois de você digitar `MEU ROTEADOR`, e nunca em Wi-Fi aberto ou corporativo.
 
-  Tem 138 testes com simulação, mas **ainda não foi rodado de verdade**. Testem num PC e num roteador de vocês antes do vídeo.
+  Tem 141 testes com simulação, mas **ainda não foi rodado de verdade**. Testem num PC e num roteador de vocês antes do vídeo.
 - [x] ✅ O painel mostra **"Corrigido pelo agente, com o seu OK"** (na demo, com correções fictícias da persona)
-- [x] 🟡 Envio da auditoria para a API de produção: funciona localmente, mas ainda não foi testado com o token de produção
+- [x] ✅ Envio da auditoria ao painel: funciona no ambiente local. **Não envie auditoria real à produção**, porque ela apareceria para todo jurado no lugar da demo (veja `docs/ROTEIRO-DE-TESTE.md`, teste 5.5)
 - [ ] ⬜ Modo vigia: avisar ao conectar num Wi-Fi aberto
 
 ## 5. Plataforma e segurança
@@ -63,7 +64,7 @@ Checklist simplificado para a dupla. Atualizado em 25/11/2026.
 - [x] ✅ No ar a custo zero: Vercel (site e API, em São Paulo) e Neon (banco, em São Paulo)
 - [x] ✅ Limites de uso por visitante e teto de chamadas à IA
 - [x] ✅ Nunca mostra o dado vazado, nunca pede senha, e todos os textos jurídicos levam "não é assessoria jurídica"
-- [x] ✅ Testes passando: 83 na API e 138 no agente, além de typecheck, lint e build
+- [x] ✅ Testes passando: 83 na API e 141 no agente, além de typecheck, lint e build
 
 ## 6. Fora do MVP
 
