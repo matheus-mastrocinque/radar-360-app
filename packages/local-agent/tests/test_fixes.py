@@ -1151,10 +1151,11 @@ class HomeFixFlowTests(SafeTestCase):
         self.assertEqual(self.fake.calls, [])
 
     def test_corrigir_closes_only_the_confirmed_mapping(self):
-        # Consent (SIM), then one answer per mapping: 3389 first (sensitive), then 8080.
-        code, payload, err = self.run_home("--corrigir", inputs=["SIM", "SIM", "nao"])
+        # Consent (SIM), the router confirmation, then one answer per mapping: 3389 first (sensitive), then 8080.
+        code, payload, err = self.run_home("--corrigir", inputs=["SIM", "MEU ROTEADOR", "SIM", "nao"])
         self.assertEqual(code, scanner.EXIT_OK)
-        self.assertEqual(self.input.call_count, 3)
+        self.assertEqual(self.input.call_count, 4)
+        self.assertIn("Antes de mexer no roteador", err)
         self.assertIn("SEU roteador", err)
         deletes = [args for _url, action, args in self.fake.calls if action == "DeletePortMapping"]
         self.assertEqual(deletes, [{"NewRemoteHost": "", "NewExternalPort": "3389", "NewProtocol": "TCP"}])
@@ -1177,7 +1178,7 @@ class HomeFixFlowTests(SafeTestCase):
 
     def test_router_refusal_is_reported(self):
         self.fake.refuse_delete = True
-        _code, payload, err = self.run_home("--corrigir", inputs=["SIM", "SIM", "SIM"])
+        _code, payload, err = self.run_home("--corrigir", inputs=["SIM", "MEU ROTEADOR", "SIM", "SIM"])
         self.assertNotIn("fixes", payload)
         self.assertIn("606", err)
         self.assertFalse(os.path.exists(self.journal))
@@ -1189,8 +1190,33 @@ class HomeFixFlowTests(SafeTestCase):
         self.assertEqual(err.count("UPnP DeletePortMapping em"), 2)
         self.input.assert_not_called()
 
+    def test_router_not_confirmed_changes_nothing(self):
+        code, payload, err = self.run_home("--corrigir", inputs=["SIM", "é do café"])
+        self.assertEqual(code, scanner.EXIT_OK)
+        self.assertEqual(self.input.call_count, 2)
+        self.assertIn("Roteador não confirmado como seu", err)
+        self.assertNotIn("DeletePortMapping", self.fake.actions())
+        self.assertNotIn("fixes", payload)
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_router_phrase_ignores_case_and_spaces(self):
+        _code, payload, _err = self.run_home("--corrigir", inputs=["SIM", "  meu   roteador ", "SIM", "nao"])
+        self.assertEqual(len(payload["fixes"]), 1)
+
+    def test_open_or_enterprise_wifi_never_touches_the_router(self):
+        for wifi in ("Aberta", "WPA2-Enterprise"):
+            with self.subTest(wifi=wifi):
+                self.fake.calls.clear()
+                with mock.patch.object(scanner, "get_wifi_security", return_value=wifi):
+                    code, payload, err = self.run_home("--corrigir", inputs=["SIM"])
+                self.assertEqual(code, scanner.EXIT_OK)
+                self.assertEqual(self.input.call_count, 1)  # only the network consent
+                self.assertIn("Correções no roteador desativadas", err)
+                self.assertNotIn("DeletePortMapping", self.fake.actions())
+                self.assertNotIn("fixes", payload)
+
     def test_undo_recreates_the_mapping(self):
-        self.run_home("--corrigir", inputs=["SIM", "SIM", "nao"])
+        self.run_home("--corrigir", inputs=["SIM", "MEU ROTEADOR", "SIM", "nao"])
         self.assertEqual(len(self.fake.mappings), 1)
         stack, _out, err = captured()
         with stack, mock.patch("builtins.input", side_effect=["1", "SIM"]):
@@ -1207,7 +1233,7 @@ class HomeFixFlowTests(SafeTestCase):
         self.assertTrue(self.read_journal()["fixes"][0]["undoneAt"])
 
     def test_undo_retries_with_permanent_lease(self):
-        self.run_home("--corrigir", inputs=["SIM", "SIM", "nao"])
+        self.run_home("--corrigir", inputs=["SIM", "MEU ROTEADOR", "SIM", "nao"])
         self.fake.permanent_only = True
         stack, _out, _err = captured()
         with stack, mock.patch("builtins.input", side_effect=["1", "SIM"]):
@@ -1217,7 +1243,7 @@ class HomeFixFlowTests(SafeTestCase):
         self.assertEqual(leases, ["3600", "0"])
 
     def test_undo_on_another_network_is_refused(self):
-        self.run_home("--corrigir", inputs=["SIM", "SIM", "nao"])
+        self.run_home("--corrigir", inputs=["SIM", "MEU ROTEADOR", "SIM", "nao"])
         calls_before = len(self.fake.calls)
         scanner.detect_network.return_value = scanner.NetworkInfo("10.0.0.5", 24, "10.0.0.1")
         stack, _out, err = captured()

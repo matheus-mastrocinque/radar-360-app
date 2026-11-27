@@ -1,4 +1,4 @@
-"""Unit tests for the Radar360 local agent.
+"""Unit tests for the Olharium local agent.
 
 Run from the package folder:
     python -I -m unittest discover -s tests

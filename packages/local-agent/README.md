@@ -1,4 +1,4 @@
-# Radar360 (Olharium) — agente local
+# Olharium — agente local
 
 Script Python (`scanner.py`, arquivo único, só biblioteca padrão, Python 3.11+) que audita a
 segurança da **sua** rede doméstica ou do **seu** computador e, opcionalmente, envia o
@@ -134,6 +134,10 @@ UPnP permitidas) e o comando é remontado a partir de uma lista fixa. Dado invá
   de outro aparelho.
 - Nada é alterado sem `--corrigir` e um `SIM` digitado para aquela correção específica. Não há
   modo de aplicar tudo de uma vez, e as opções não aceitam abreviação.
+- **Roteador só se for seu.** O `SIM` do modo casa não distingue a sua casa de um café (os dois
+  usam 192.168.x.x). Por isso, antes de qualquer correção no roteador, o agente mostra o IP e o
+  endereço físico (MAC) do gateway e pede que você digite `MEU ROTEADOR`. Em Wi-Fi aberto (sem
+  senha) ou corporativo (Enterprise/802.1X), ele nem oferece correção no roteador.
 - Modo casa só roda em IP privado RFC1918 (10/8, 172.16/12, 192.168/16). Recusa CGNAT
   (100.64/10), IP público, loopback, link-local e redes /31–/32 (VPN).
 - Analisa no máximo uma /24 (254 endereços), até 64 conexões simultâneas, timeout de 0,4 s por

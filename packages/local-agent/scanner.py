@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Radar360 - local network audit agent (Hack Brasil 2026).
+"""Olharium - local network audit agent (Hack Brasil 2026).
 
 Two modes:
 
@@ -9,7 +9,7 @@ Two modes:
                a /24, gentle timeouts and a global time cap.
 * ``public`` - audits only this computer and its own connection using local OS
                commands. It never sends a packet to any other host; the only
-               network traffic is the optional upload to the Radar360 API.
+               network traffic is the optional upload to the Olharium API.
 
 Allowed network actions (home mode only, after consent): TCP connect checks,
 passively reading the banner a service sends on connect, one plain ``GET /``
@@ -57,7 +57,7 @@ import urllib.parse
 import urllib.request
 
 AGENT_VERSION = "0.1.0"
-USER_AGENT = f"Radar360-LocalAgent/{AGENT_VERSION}"
+USER_AGENT = f"Olharium-LocalAgent/{AGENT_VERSION}"
 TOKEN_ENV_VAR = "RADAR360_PAIRING_TOKEN"
 
 # --- Exit codes -------------------------------------------------------------
@@ -1723,7 +1723,7 @@ def build_device_findings(device: Device) -> list[dict]:
                     version_port = port
     if versions:
         add("low", "possibly_outdated_software", "Versão de software exposta: verifique atualização",
-            f"{who_full} informou a versão: {', '.join(versions[:3])}. O Radar360 não confirma "
+            f"{who_full} informou a versão: {', '.join(versions[:3])}. O Olharium não confirma "
             "se há atualização disponível, mas esse software pode estar possivelmente "
             "desatualizado, e versões antigas costumam ter falhas conhecidas.",
             "Procure 'atualização de firmware' no painel ou app do fabricante e ative "
@@ -2567,7 +2567,7 @@ _WIFI_DISPLAY = {
 
 
 def format_summary(payload: dict, elapsed: float | None = None) -> str:
-    lines = ["=" * 66, f" Radar360 - agente local v{payload['agentVersion']}", "=" * 66]
+    lines = ["=" * 66, f" Olharium - agente local v{payload['agentVersion']}", "=" * 66]
     mode = (
         "casa (rede local, com consentimento)" if payload["mode"] == "home"
         else "público (somente este computador)"
@@ -3568,11 +3568,53 @@ def obtain_consent(flag: bool) -> bool:
     return answer.strip().upper() == "SIM"
 
 
+# Frase que a pessoa digita para confirmar que o roteador é dela, antes de qualquer correção nele.
+ROUTER_CONFIRM_PHRASE = "MEU ROTEADOR"
+
+
+def router_fix_block_reason(wifi_raw: str | None) -> str | None:
+    """Why router fixes are not offered on this network (None means allowed).
+
+    The SIM consent cannot tell a home from a café: both use 192.168.x.x. Open and Enterprise
+    Wi-Fi are almost never the user's own router, so changing it there is refused outright.
+    """
+    level, enterprise = classify_wifi_security(wifi_raw)
+    if level == "open":
+        return "o Wi-Fi atual é aberto (sem senha), típico de rede pública"
+    if enterprise:
+        return "o Wi-Fi atual é corporativo (Enterprise/802.1X), típico de empresa, evento ou universidade"
+    return None
+
+
+def gateway_mac(arp: list[tuple[str, str]], gateway: str | None) -> str | None:
+    return next((mac for ip, mac in arp if gateway and ip == gateway), None)
+
+
+def confirm_router_owner(gateway: str | None, mac: str | None, wifi_label: str | None) -> bool:
+    """Second, router-specific confirmation: altering someone else's router is not allowed."""
+    log("\n".join([
+        "",
+        "=" * 66,
+        " Antes de mexer no roteador",
+        "=" * 66,
+        f" Roteador (gateway)  : {gateway or 'desconhecido'}",
+        f" Endereço físico     : {mac or 'não lido'}",
+        f" Segurança do Wi-Fi  : {wifi_label or 'não lida'}",
+        "",
+        " As correções a seguir mudam a configuração DESTE roteador. Continue só se ele",
+        " for SEU (ou se você tiver autorização por escrito do dono). Alterar o roteador",
+        " de outra pessoa sem autorização pode ser crime (Código Penal, art. 154-A).",
+        "=" * 66,
+    ]))
+    answer = ask_line(f"Digite {ROUTER_CONFIRM_PHRASE} para confirmar que este roteador é seu: ")
+    return answer is not None and " ".join(answer.split()).upper() == ROUTER_CONFIRM_PHRASE
+
+
 def _print_home_banner(net: NetworkInfo, scan_net: ipaddress.IPv4Network, fixing: bool = False) -> None:
     host_count = max(scan_net.num_addresses - 2, 1)
     lines = [
         "=" * 66,
-        " Radar360 - modo CASA (análise da rede local)",
+        " Olharium - modo CASA (análise da rede local)",
         "=" * 66,
         f" IP deste computador : {net.local_ip}",
         f" Rede detectada      : {net.cidr or 'máscara desconhecida (usando /24)'}",
@@ -3586,7 +3628,8 @@ def _print_home_banner(net: NetworkInfo, scan_net: ipaddress.IPv4Network, fixing
     if fixing:
         lines += [
             " Com --corrigir: depois da análise, o agente pode propor fechar no SEU roteador",
-            " portas abertas pelo UPnP, uma por vez, e só fecha se você digitar SIM.",
+            f" portas abertas pelo UPnP. Antes, pede que você digite {ROUTER_CONFIRM_PHRASE}; depois,",
+            " SIM para cada porta. Em Wi-Fi aberto ou corporativo, não mexe no roteador.",
         ]
     else:
         lines.append(" Nada é alterado nos aparelhos.")
@@ -3667,14 +3710,23 @@ def run_home(args: argparse.Namespace) -> int:
     plans = plan_router_fixes(mappings) if (args.corrigir or args.simular) else []
     applied: list[dict] = []
     if fixing:
-        _authorize_probes(scan_net)  # same consented network, own router only
-        try:
-            applied = run_fix_flow(plans, os_name, hostname)
-            if applied:
-                log("Conferindo de novo as portas abertas pelo UPnP no roteador...")
-                mappings = list_all_port_mappings(services, time.monotonic() + UPNP_RELIST_CAP)
-        finally:
-            _revoke_probes()
+        blocked = router_fix_block_reason(wifi_raw) if plans else None
+        if blocked:
+            log(f"\nCorreções no roteador desativadas: {blocked}. Em rede que não é sua, o agente não "
+                "altera o roteador. Nada foi alterado.")
+        elif plans and _stdin_is_interactive() and not confirm_router_owner(
+            net.gateway, gateway_mac(arp, net.gateway), wifi_security_label(wifi_raw)
+        ):
+            log("\nRoteador não confirmado como seu: nenhuma correção foi aplicada.")
+        else:
+            _authorize_probes(scan_net)  # same consented network, own router only
+            try:
+                applied = run_fix_flow(plans, os_name, hostname)
+                if applied:
+                    log("Conferindo de novo as portas abertas pelo UPnP no roteador...")
+                    mappings = list_all_port_mappings(services, time.monotonic() + UPNP_RELIST_CAP)
+            finally:
+                _revoke_probes()
         if not plans:
             log("Para corrigir este computador (firewall, compartilhamento etc.), use --mode public --corrigir.")
 
@@ -3760,7 +3812,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         prog="scanner.py",
         allow_abbrev=False,  # consent and fix flags must be typed in full
         description=(
-            "Radar360 - agente local de auditoria de rede. Modo 'home' analisa a SUA rede "
+            "Olharium - agente local de auditoria de rede. Modo 'home' analisa a SUA rede "
             "doméstica (exige consentimento); modo 'public' verifica só este computador."
         ),
     )
@@ -3777,7 +3829,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--desfazer", action="store_true",
                         help="lista as correções feitas pelo agente e desfaz a escolhida (ou todas), "
                              "com confirmação")
-    parser.add_argument("--api", help="URL base da API do Radar360 (https://...)")
+    parser.add_argument("--api", help="URL base da API do Olharium (https://...)")
     parser.add_argument("--token", help=f"token de pareamento (ou variável de ambiente {TOKEN_ENV_VAR})")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true",
                         help="nunca envia nada para a API")
