@@ -1,6 +1,6 @@
 # Estado do projeto: Radar360
 
-Atualizado em 25/11/2026, depois do deploy da central de comando.
+Atualizado em 27/11/2026, depois do deploy da revisão de 27/11.
 
 **Demo no ar:** [radar360-web.vercel.app](https://radar360-web.vercel.app) (API: [radar360-api-hazel.vercel.app/health](https://radar360-api-hazel.vercel.app/health)).
 
@@ -20,8 +20,13 @@ Este arquivo diz o que está pronto, o que falta para a submissão e quais decis
 | `0852af8` | Vazamentos reais (catálogo HIBP), Minhas contas e "a empresa me avisou" |
 | `f401e64` | Marca Olharium (HUD Neon), design system e telas refeitas |
 | `4488f6d` | Painel vira central de comando: tudo numa tela, mapa de exposição e gaveta de detalhes |
+| `c138de2` | Agente pede `MEU ROTEADOR` antes de mexer no roteador e se apresenta como Olharium |
+| `88a7182` | Notificação e petição à ANPD com as ressalvas da Resolução 1/2021 e da 15/2024 |
+| `e848552` | Kit MED no plano do golpe do Pix e aviso de privacidade da demo |
+| `6f59df2` | Painel mais leve: 4 módulos e a 1ª ação em destaque (revisão de UX) |
+| `ea24878` | Decisões de 27/11 e roteiro de teste |
 
-A produção roda o código do `4488f6d`: o site foi publicado de novo em 25/11 à tarde com a central de comando. A API segue no `f401e64`, que não mudou, com as duas migrações aplicadas no Neon e o catálogo de vazamentos reais importado (872 vazamentos). Todos os roteiros de verificação passaram no endereço público, incluindo o roteiro novo da gaveta (26 checagens).
+A produção roda o código do `ea24878` (site e API), publicado em 27/11. Não houve migração nova: o banco segue com as duas migrações de 25/11 e o catálogo de vazamentos reais importado (872 vazamentos). No endereço público passaram os roteiros da gaveta (40 checagens), do kit MED e da petição, do copiloto, do vazamento real, de Minhas contas e da landing, sem erro de página e sem rolagem horizontal de 360 a 1920 px.
 
 ## Prazos
 
