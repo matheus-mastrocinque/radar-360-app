@@ -5,6 +5,7 @@ import { ArrowRight, CalendarClock, ChevronRight, Scale, ShieldCheck } from "luc
 import { BreachFacts, ReportedBreachFacts } from "@/components/copilot/facts";
 import { originOf, summaryOf, TYPE_ICON } from "@/components/copilot/incident-meta";
 import { LgpdPanel } from "@/components/copilot/lgpd-panel";
+import { MedKit } from "@/components/copilot/med-kit";
 import { PHASE_META } from "@/components/copilot/phase-style";
 import { PlanArrival } from "@/components/copilot/plan-arrival";
 import { nextStepOf, ProgressMeter, ResponsePlan, stepAnchor } from "@/components/copilot/plan";
@@ -209,7 +210,9 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
 
       <ResponsePlan incident={incident} />
 
-      {incident.lgpd && <LgpdPanel incident={incident} lgpd={incident.lgpd} />}
+      {incident.type === "PIX_SCAM" && <MedKit />}
+
+      {incident.lgpd &&<LgpdPanel incident={incident} lgpd={incident.lgpd} />}
 
       <p className="flex items-start gap-2.5 rounded-lg bg-ink px-4 py-3 text-xs leading-relaxed text-muted-foreground ring-1 ring-white/[0.06]">
         <Scale className="mt-px size-3.5 shrink-0 text-rubi" aria-hidden />

@@ -11,6 +11,7 @@ import {
   FlaskConical,
   Gauge,
   KeyRound,
+  Lock,
   Network,
   Radar,
   Scale,
@@ -139,7 +140,7 @@ const SAFEGUARDS = [
     icon: Network,
     title: "Só na sua rede, só com o seu OK",
     description:
-      "O agente recusa IP público e rede de operadora, nunca tenta senha nem invade aparelhos. Cada correção pede confirmação e pode ser desfeita.",
+      "O agente recusa IP público e rede de operadora, nunca tenta senha nem invade aparelhos. Cada correção pede confirmação e pode ser desfeita, e no roteador ele só mexe depois que você confirma que é seu.",
   },
   {
     icon: Scale,
@@ -518,6 +519,15 @@ export default async function Home({
                 </ul>
               </div>
             </div>
+
+            <p className="flex items-start gap-2.5 rounded-lg bg-ink px-4 py-3 text-sm leading-relaxed text-muted-foreground ring-1 ring-white/[0.06]">
+              <Lock className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+              <span>
+                <span className="font-medium text-foreground">Privacidade da demo:</span> o que você criar (contas,
+                relatos e planos) fica só na sua sessão e é apagado depois que ela expira, em 2 horas. Antes de salvar um
+                relato, tiramos CPF, cartão, telefone, e-mail e chave Pix. Os dados ficam em servidores em São Paulo.
+              </span>
+            </p>
 
             {/* Chamada final */}
             <div className="relative isolate flex flex-col gap-6 overflow-hidden rounded-2xl bg-card px-6 py-10 ring-1 ring-white/[0.08] sm:px-10 lg:flex-row lg:items-center lg:justify-between">

@@ -150,8 +150,8 @@ function StatusBanner({ lgpd }: { lgpd: Lgpd }) {
   if (timeline.status === "overdue" && timeline.deadline) {
     return (
       <StateAlert tone="danger" label="Prazo vencido." role="alert">
-        O prazo terminou em <strong>{formatDate(timeline.deadline)}</strong> sem resposta. Você já pode levar o caso à
-        ANPD: a petição abaixo está pronta.
+        O prazo de 15 dias da LGPD terminou em <strong>{formatDate(timeline.deadline)}</strong> sem resposta: a empresa
+        está em falta. A petição à ANPD está pronta abaixo; leia o passo a passo antes de enviar.
       </StateAlert>
     );
   }
