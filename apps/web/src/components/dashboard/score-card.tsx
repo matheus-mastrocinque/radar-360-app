@@ -4,8 +4,11 @@ import { LEVEL_BANDS, LEVEL_STYLE } from "./styles";
 
 /*
  * Medidor do score no desenho da mira da marca: anel de graduação, faixas de nível, um anel fino
- * (a órbita) com os três fragmentos e uma varredura lenta. É o único destaque de HUD do painel.
- * As faixas e o arco usam as cores de estado (success → warning → danger), nunca o carmesim.
+ * (a órbita) com os três fragmentos e uma varredura lenta. As faixas e o arco usam as cores de
+ * estado (success → warning → danger), nunca o carmesim.
+ *
+ * `variant="quiet"` é o medidor compacto da central de comando: sem mira, órbita, varredura nem selo
+ * (o nível fica ao lado, em texto), porque o destaque de HUD daquela tela é o mapa de exposição.
  */
 const VIEW = 260;
 const C = VIEW / 2;
@@ -35,8 +38,18 @@ function arc(radius: number, from: number, to: number): string {
 }
 
 const TICKS = Array.from({ length: 51 }, (_, index) => index * 2);
+const MAJOR_TICKS = TICKS.filter((value) => value % 10 === 0);
 
-export function ScoreGauge({ score, className }: { score: Dashboard["score"]; className?: string }) {
+export function ScoreGauge({
+  score,
+  className,
+  variant = "hud",
+}: {
+  score: Dashboard["score"];
+  className?: string;
+  variant?: "hud" | "quiet";
+}) {
+  const quiet = variant === "quiet";
   const style = LEVEL_STYLE[score.level];
   const LevelIcon = style.icon;
   const marker = polar(R_BAND, score.value);
@@ -46,21 +59,26 @@ export function ScoreGauge({ score, className }: { score: Dashboard["score"]; cl
   return (
     <div
       className={cn(
-        "hud-corners relative mx-auto aspect-square w-full max-w-[320px] [--hud-color:color-mix(in_oklab,var(--rubi)_75%,transparent)] [--hud-len:18px]",
+        "relative mx-auto aspect-square w-full max-w-[320px]",
+        !quiet && "hud-corners [--hud-color:color-mix(in_oklab,var(--rubi)_75%,transparent)] [--hud-len:18px]",
         className,
       )}
     >
       <svg viewBox={`0 0 ${VIEW} ${VIEW}`} className="absolute inset-0 size-full overflow-visible" aria-hidden focusable="false">
         {/* Asas da mira no eixo horizontal */}
-        <g className="stroke-rubi" strokeWidth={1.5}>
-          <line x1={0} y1={C} x2={9} y2={C} />
-          <line x1={VIEW - 9} y1={C} x2={VIEW} y2={C} />
-        </g>
-        <polygon points={`11,${C - 3.5} 16,${C} 11,${C + 3.5}`} className="fill-rubi" />
-        <polygon points={`${VIEW - 11},${C - 3.5} ${VIEW - 16},${C} ${VIEW - 11},${C + 3.5}`} className="fill-rubi" />
+        {!quiet && (
+          <>
+            <g className="stroke-rubi" strokeWidth={1.5}>
+              <line x1={0} y1={C} x2={9} y2={C} />
+              <line x1={VIEW - 9} y1={C} x2={VIEW} y2={C} />
+            </g>
+            <polygon points={`11,${C - 3.5} 16,${C} 11,${C + 3.5}`} className="fill-rubi" />
+            <polygon points={`${VIEW - 11},${C - 3.5} ${VIEW - 16},${C} ${VIEW - 11},${C + 3.5}`} className="fill-rubi" />
+          </>
+        )}
 
-        {/* Anel de graduação: a cada 2 pontos, marcas maiores a cada 10 */}
-        {TICKS.map((value) => {
+        {/* Anel de graduação: a cada 2 pontos, marcas maiores a cada 10 (no compacto, só as maiores) */}
+        {(quiet ? MAJOR_TICKS : TICKS).map((value) => {
           const major = value % 10 === 0;
           const outer = polar(122, value);
           const inner = polar(major ? 111 : 116, value);
@@ -76,12 +94,21 @@ export function ScoreGauge({ score, className }: { score: Dashboard["score"]; cl
             />
           );
         })}
-        <text x={zero.x - 2} y={zero.y + 14} textAnchor="middle" className="fill-muted-foreground font-mono text-[9px]">
-          0
-        </text>
-        <text x={hundred.x + 2} y={hundred.y + 14} textAnchor="middle" className="fill-muted-foreground font-mono text-[9px]">
-          100
-        </text>
+        {!quiet && (
+          <>
+            <text x={zero.x - 2} y={zero.y + 14} textAnchor="middle" className="fill-muted-foreground font-mono text-[9px]">
+              0
+            </text>
+            <text
+              x={hundred.x + 2}
+              y={hundred.y + 14}
+              textAnchor="middle"
+              className="fill-muted-foreground font-mono text-[9px]"
+            >
+              100
+            </text>
+          </>
+        )}
 
         {/* Faixas de nível (trilho) e o arco do score */}
         {LEVEL_BANDS.map((band) => (
@@ -90,65 +117,87 @@ export function ScoreGauge({ score, className }: { score: Dashboard["score"]; cl
             d={arc(R_BAND, band.from + (band.from === 0 ? 0 : 0.8), band.to - (band.to === 100 ? 0 : 0.8))}
             className={cn("fill-none", LEVEL_STYLE[band.level].stroke)}
             strokeOpacity={band.level === score.level ? 0.3 : 0.13}
-            strokeWidth={9}
+            strokeWidth={quiet ? 11 : 9}
           />
         ))}
         {score.value > 0 && (
-          <path d={arc(R_BAND, 0, score.value)} className={cn("fill-none", style.stroke)} strokeWidth={9} />
+          <path d={arc(R_BAND, 0, score.value)} className={cn("fill-none", style.stroke)} strokeWidth={quiet ? 11 : 9} />
         )}
 
         {/* Órbita com os três fragmentos (as três fases da resposta) */}
-        <circle cx={C} cy={C} r={R_ORBIT} className="fill-none stroke-rubi/35" strokeWidth={1} />
-        <circle cx={C} cy={C} r={R_ORBIT - 7} className="fill-none stroke-foreground/10" strokeWidth={1} strokeDasharray="1 5" />
-        <g className="motion-safe:animate-orbit" style={{ transformOrigin: `${C}px ${C}px`, transformBox: "view-box" }}>
-          {[-90, 30, 150].map((angle) => (
-            <g key={angle} transform={`rotate(${angle} ${C} ${C}) translate(${C + R_ORBIT} ${C})`}>
-              <polygon points="0,-8 3,0 0,8 -3,0" className="fill-ink stroke-rubi" strokeWidth={1.2} />
+        <circle cx={C} cy={C} r={R_ORBIT} className="fill-none stroke-rubi/35" strokeWidth={quiet ? 1.5 : 1} />
+        {!quiet && (
+          <>
+            <circle
+              cx={C}
+              cy={C}
+              r={R_ORBIT - 7}
+              className="fill-none stroke-foreground/10"
+              strokeWidth={1}
+              strokeDasharray="1 5"
+            />
+            <g className="motion-safe:animate-orbit" style={{ transformOrigin: `${C}px ${C}px`, transformBox: "view-box" }}>
+              {[-90, 30, 150].map((angle) => (
+                <g key={angle} transform={`rotate(${angle} ${C} ${C}) translate(${C + R_ORBIT} ${C})`}>
+                  <polygon points="0,-8 3,0 0,8 -3,0" className="fill-ink stroke-rubi" strokeWidth={1.2} />
+                </g>
+              ))}
             </g>
-          ))}
-        </g>
+          </>
+        )}
 
         {/* Ponto do score: o ponto branco da varredura da marca */}
-        <circle cx={marker.x} cy={marker.y} r={8} className="fill-background" />
-        <circle cx={marker.x} cy={marker.y} r={4} className="fill-foreground" />
+        <circle cx={marker.x} cy={marker.y} r={quiet ? 10 : 8} className="fill-background" />
+        <circle cx={marker.x} cy={marker.y} r={quiet ? 5 : 4} className="fill-foreground" />
       </svg>
 
-      {/* Halo da marca e varredura, atrás do medidor (z negativo) */}
+      {/* Halo da marca, atrás do medidor (z negativo) */}
       <div
-        className="absolute inset-[18%] -z-10 rounded-full bg-crimson/25 blur-3xl"
+        className={cn("absolute inset-[18%] -z-10 rounded-full blur-3xl", quiet ? "bg-crimson/15" : "bg-crimson/25")}
         aria-hidden
       />
       {/* Varredura do radar: monitoramento contínuo. Para com "reduzir movimento". */}
-      <div
-        className="absolute inset-[19.5%] -z-[5] overflow-hidden rounded-full bg-[radial-gradient(circle,var(--ink)_0%,color-mix(in_oklab,var(--ink)_70%,transparent)_70%,transparent_100%)]"
-        aria-hidden
-      >
+      {!quiet && (
         <div
-          className="absolute inset-0 rounded-full motion-safe:animate-radar-sweep"
-          style={{
-            background:
-              "conic-gradient(from 0deg, transparent 0deg 285deg, color-mix(in oklab, var(--rubi) 18%, transparent) 357deg, color-mix(in oklab, var(--rubi) 55%, transparent) 359.4deg, transparent 360deg)",
-          }}
-        />
-      </div>
+          className="absolute inset-[19.5%] -z-[5] overflow-hidden rounded-full bg-[radial-gradient(circle,var(--ink)_0%,color-mix(in_oklab,var(--ink)_70%,transparent)_70%,transparent_100%)]"
+          aria-hidden
+        >
+          <div
+            className="absolute inset-0 rounded-full motion-safe:animate-radar-sweep"
+            style={{
+              background:
+                "conic-gradient(from 0deg, transparent 0deg 285deg, color-mix(in oklab, var(--rubi) 18%, transparent) 357deg, color-mix(in oklab, var(--rubi) 55%, transparent) 359.4deg, transparent 360deg)",
+            }}
+          />
+        </div>
+      )}
 
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="eyebrow text-[10px] text-muted-foreground">Exposição</span>
-        <span className="font-mono text-6xl leading-none font-semibold tracking-tight text-rubi tabular-nums text-glow sm:text-[64px]">
+        {!quiet && <span className="eyebrow text-[10px] text-muted-foreground">Exposição</span>}
+        <span
+          className={cn(
+            "font-mono leading-none font-semibold tracking-tight text-rubi tabular-nums text-glow",
+            quiet ? "text-[40px]" : "text-6xl sm:text-[64px]",
+          )}
+        >
           {score.value}
         </span>
-        <span className="mt-1 font-mono text-xs text-muted-foreground">de {score.max}</span>
+        <span className={cn("font-mono text-muted-foreground", quiet ? "mt-0.5 text-[10px]" : "mt-1 text-xs")}>
+          de {score.max}
+        </span>
       </div>
 
-      <span
-        className={cn(
-          "absolute bottom-[3%] left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider whitespace-nowrap uppercase ring-1 ring-inset",
-          style.badge,
-        )}
-      >
-        <LevelIcon className="size-3.5" aria-hidden />
-        {style.label}
-      </span>
+      {!quiet && (
+        <span
+          className={cn(
+            "absolute bottom-[3%] left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider whitespace-nowrap uppercase ring-1 ring-inset",
+            style.badge,
+          )}
+        >
+          <LevelIcon className="size-3.5" aria-hidden />
+          {style.label}
+        </span>
+      )}
     </div>
   );
 }

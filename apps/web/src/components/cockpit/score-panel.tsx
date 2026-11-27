@@ -1,14 +1,18 @@
 import { ArrowUpRight } from "lucide-react";
 import { ComponentBar, ScoreGauge } from "@/components/dashboard/score-card";
-import { LEVEL_BANDS, LEVEL_STYLE } from "@/components/dashboard/styles";
+import { LEVEL_STYLE } from "@/components/dashboard/styles";
 import type { Dashboard } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
 import { InspectTrigger } from "./inspector";
 import { Panel } from "./panel";
 
-/** Score de exposição: medidor, faixas e a soma das duas partes. O detalhe fica na gaveta ("Fórmula"). */
+/*
+ * Score de exposição, compacto: medidor, nível em texto e de onde vêm os pontos. As faixas e a conta
+ * completa ficam na gaveta ("Fórmula"). O medidor é a versão calma; o HUD da tela é o mapa.
+ */
 export function ScorePanel({ score, className }: { score: Dashboard["score"]; className?: string }) {
   const style = LEVEL_STYLE[score.level];
+  const LevelIcon = style.icon;
 
   return (
     <Panel
@@ -16,7 +20,6 @@ export function ScorePanel({ score, className }: { score: Dashboard["score"]; cl
       index="01"
       label="Score de exposição"
       className={className}
-      bodyClassName="gap-3.5 p-4"
       aside={
         <InspectTrigger
           target="score"
@@ -27,32 +30,32 @@ export function ScorePanel({ score, className }: { score: Dashboard["score"]; cl
         </InspectTrigger>
       }
     >
-      <p className="sr-only">
-        Seu score é {score.value} de {score.max}: {style.label.toLowerCase()}. Quanto maior, mais exposto.
-      </p>
-      <div className="relative isolate">
-        <ScoreGauge score={score} className="max-w-[196px] [--hud-len:12px]" />
-      </div>
-
-      <ol className="flex gap-1" aria-label="Faixas do score">
-        {LEVEL_BANDS.map((band) => {
-          const active = band.level === score.level;
-          return (
-            <li
-              key={band.level}
-              aria-current={active ? "true" : undefined}
-              className={cn("flex flex-1 flex-col gap-1 text-center font-mono text-[9.5px] uppercase", active ? "text-foreground" : "text-muted-foreground/70")}
+      <div className="flex items-center gap-4 px-4 py-3">
+        <p className="sr-only">
+          Seu score é {score.value} de {score.max}: {style.label.toLowerCase()}. Quanto maior, mais exposto.
+        </p>
+        <div className="relative isolate w-[116px] shrink-0">
+          <ScoreGauge score={score} variant="quiet" />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <span
+              className={cn(
+                "flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider whitespace-nowrap uppercase ring-1 ring-inset",
+                style.badge,
+              )}
+              aria-hidden
             >
-              <span className={cn("h-1 rounded-full", LEVEL_STYLE[band.level].bar, !active && "opacity-30")} aria-hidden />
-              {band.label}
-            </li>
-          );
-        })}
-      </ol>
-
-      <div className="flex flex-col gap-2.5 rounded-lg bg-ink p-3 ring-1 ring-white/[0.06]">
-        <ComponentBar label="Vazamentos" points={score.leaks.points} cap={score.leaks.cap} />
-        <ComponentBar label="Rede" points={score.network.points} cap={score.network.cap} />
+              <LevelIcon className="size-3.5" />
+              {style.label}
+            </span>
+            <span className="text-xs text-muted-foreground">De 0 a 100: quanto maior, mais exposto.</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            <ComponentBar label="Vazamentos" points={score.leaks.points} cap={score.leaks.cap} />
+            <ComponentBar label="Rede" points={score.network.points} cap={score.network.cap} />
+          </div>
+        </div>
       </div>
     </Panel>
   );

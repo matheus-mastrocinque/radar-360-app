@@ -101,6 +101,8 @@ export interface ActionStep {
   points: number;
   tone: Tone;
   severity: Severity | null;
+  /** Só para achados de rede: o agente corrige com o OK do usuário ou a correção é manual. */
+  fix: "agent" | "manual" | null;
 }
 
 /** As ações que mais reduzem o risco, com textos da tabela curada e das recomendações do agente. */
@@ -129,6 +131,7 @@ export function buildActionSteps(dashboard: Dashboard, limit = 6): ActionStep[] 
     points: leakPoints.get(info.label) ?? info.weight,
     tone: dataClassTone(info.weight),
     severity: null,
+    fix: null,
     weight: info.weight,
   }));
 
@@ -148,6 +151,7 @@ export function buildActionSteps(dashboard: Dashboard, limit = 6): ActionStep[] 
         points: FINDING_POINTS[finding.severity],
         tone: SEVERITY_TONE[finding.severity],
         severity: finding.severity,
+        fix: AGENT_FIXABLE_KINDS.has(finding.kind) ? "agent" : "manual",
         weight: FINDING_POINTS[finding.severity],
       });
     }
@@ -298,16 +302,9 @@ export interface MapEdge {
   flow: boolean;
 }
 
-export interface MapReadout {
-  sector: "identity" | "network" | "accounts";
-  label: string;
-  value: string;
-}
-
 export interface ExposureMap {
   nodes: MapNode[];
   edges: MapEdge[];
-  readouts: MapReadout[];
 }
 
 function round(value: number): number {
@@ -510,7 +507,7 @@ export function buildExposureMap(
         return rank(a.ip) - rank(b.ip);
       })
       .slice(0, MAX_DEVICES);
-    const angles = evenly(devices.length, 126, 16, 56);
+    const angles = evenly(devices.length, 126, 19, 64);
     devices.forEach((device, index) => {
       networkSlots.push({
         angle: angles[index],
@@ -570,7 +567,7 @@ export function buildExposureMap(
       },
     });
   }
-  for (const slot of spread(networkSlots, 16, 98, 196)) slot.build(slot.angle);
+  for (const slot of spread(networkSlots, 19, 96, 198)) slot.build(slot.angle);
 
   /* Contas: o hub (dentro) e os serviços (fora), embaixo à direita. */
   const accountList = accounts?.accounts ?? [];
@@ -596,7 +593,7 @@ export function buildExposureMap(
   const services = [...accountList]
     .sort((a, b) => b.breaches.length - a.breaches.length)
     .slice(0, MAX_SERVICES);
-  const serviceAngles = evenly(services.length, 40, 18, 64);
+  const serviceAngles = evenly(services.length, 42, 27, 76);
   const serviceSlots = spread(
     services.map((account, index) => ({ account, angle: serviceAngles[index] })),
     18,
@@ -624,25 +621,5 @@ export function buildExposureMap(
     link(`accounts-${account.id}`, hubPoint, point, tone);
   }
 
-  const deviceCount = home?.devices.length ?? 0;
-  const alerts = dashboard.summary.importantNetworkAlerts;
-  const readouts: MapReadout[] = [
-    {
-      sector: "identity",
-      label: "Identidade",
-      value: `${plural(dashboard.assets.length, "dado")} · ${plural(dashboard.breaches.length, "vazamento")}`,
-    },
-    {
-      sector: "network",
-      label: "Rede",
-      value: `${plural(deviceCount + (pub ? 1 : 0), "aparelho")} · ${plural(alerts, "alerta")}`,
-    },
-    {
-      sector: "accounts",
-      label: "Contas",
-      value: `${plural(accountList.length, "serviço")} · ${breached.length} com vazamento`,
-    },
-  ];
-
-  return { nodes, edges, readouts };
+  return { nodes, edges };
 }

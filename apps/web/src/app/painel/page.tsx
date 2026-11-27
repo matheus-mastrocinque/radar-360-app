@@ -4,10 +4,9 @@ import { redirect } from "next/navigation";
 import { LifeBuoy } from "lucide-react";
 import { ActionQueue } from "@/components/cockpit/action-queue";
 import { ActivityFeed } from "@/components/cockpit/activity-feed";
-import { AgentPanel } from "@/components/cockpit/agent-panel";
 import { buildPanels } from "@/components/cockpit/details";
 import { ExposureMapPanel } from "@/components/cockpit/exposure-map";
-import { InspectorProvider } from "@/components/cockpit/inspector";
+import { InspectorProvider, InspectTrigger } from "@/components/cockpit/inspector";
 import { KpiStrip } from "@/components/cockpit/kpi-strip";
 import { buildActionSteps, buildActivity, buildExposureMap, MAP_TALL, MAP_WIDE } from "@/components/cockpit/model";
 import { LiveDot } from "@/components/cockpit/panel";
@@ -17,7 +16,7 @@ import { ErrorState } from "@/components/shell/error-state";
 import { buttonVariants } from "@/components/ui/button";
 import { fetchAccounts } from "@/lib/accounts";
 import { fetchDashboardOnce } from "@/lib/dashboard";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, plural } from "@/lib/format";
 import { getSessionToken } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -30,8 +29,10 @@ function firstName(name: string | null): string {
 }
 
 /*
- * Central de comando: tudo numa tela. Score, mapa de exposição, fila de ação, agente e linha do tempo
- * ficam visíveis juntos; o detalhe de qualquer ponto abre numa gaveta lateral, sem sair da página.
+ * Central de comando, em três níveis de leitura:
+ * 1. Em 5 segundos: o veredito (título), o score e a primeira ação, aberta.
+ * 2. Num olhar: o mapa de exposição, com o resumo de cada setor no rodapé, e as próximas ações.
+ * 3. A um clique: o detalhe de qualquer ponto, a fórmula e a linha do tempo inteira, na gaveta lateral.
  */
 export default async function PainelPage() {
   const token = await getSessionToken();
@@ -63,11 +64,18 @@ export default async function PainelPage() {
                 Monitoramento ativo
               </span>
               <span aria-hidden>·</span>
+              <InspectTrigger
+                target="assets"
+                className="rounded underline decoration-white/20 underline-offset-2 outline-none hover:text-foreground hover:decoration-current focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {plural(dashboard.summary.assets, "dado vigiado", "dados vigiados")}
+              </InspectTrigger>
+              <span aria-hidden>·</span>
               <span>checagem a cada 6 h</span>
-              <span aria-hidden className="max-sm:hidden">
+              <span aria-hidden className="max-xl:hidden">
                 ·
               </span>
-              <span className="max-sm:hidden">atualizado em {formatDateTime(dashboard.generatedAt)}</span>
+              <span className="max-xl:hidden">atualizado em {formatDateTime(dashboard.generatedAt)}</span>
             </p>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px]">
               Olá, {firstName(dashboard.user.name)}.{" "}
@@ -86,26 +94,20 @@ export default async function PainelPage() {
           </Link>
         </div>
 
-        <KpiStrip dashboard={dashboard} accounts={accounts} />
-
-        <div className="grid gap-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
-          <ScorePanel score={dashboard.score} className="order-1 lg:order-none lg:col-start-1 lg:row-start-1" />
+        {/* Primeira dobra: à esquerda, o risco e o que fazer; à direita, o mapa (o único destaque de HUD). */}
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,370px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-3">
+            <ScorePanel score={dashboard.score} />
+            <ActionQueue steps={steps} className="flex-1" />
+          </div>
           <ExposureMapPanel
             wide={buildExposureMap(dashboard, accounts, MAP_WIDE)}
             tall={buildExposureMap(dashboard, accounts, MAP_TALL)}
-            className="order-3 lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1"
-          />
-          <ActionQueue
-            steps={steps}
-            className="order-2 max-h-[560px] lg:order-none lg:col-start-2 lg:row-start-3 xl:col-start-3 xl:row-start-1 xl:h-0 xl:max-h-none xl:min-h-full"
-          />
-          <AgentPanel dashboard={dashboard} className="order-4 lg:order-none lg:col-start-1 lg:row-start-2" />
-          <ActivityFeed
-            items={buildActivity(dashboard)}
-            now={dashboard.generatedAt}
-            className="order-5 max-h-[440px] lg:order-none lg:col-start-1 lg:row-start-3 xl:col-start-3 xl:row-start-2 xl:h-0 xl:max-h-none xl:min-h-full"
+            footer={<KpiStrip dashboard={dashboard} accounts={accounts} />}
           />
         </div>
+
+        <ActivityFeed items={buildActivity(dashboard)} now={dashboard.generatedAt} />
       </main>
     </InspectorProvider>
   );

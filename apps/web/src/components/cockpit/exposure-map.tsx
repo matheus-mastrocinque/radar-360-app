@@ -1,9 +1,22 @@
-import { AtSign, CircleUserRound, Cpu, Database, Globe, House, IdCard, KeyRound, Laptop, Phone, Router, Wifi } from "lucide-react";
+import {
+  AtSign,
+  Cpu,
+  Database,
+  Globe,
+  House,
+  IdCard,
+  KeyRound,
+  Laptop,
+  MousePointerClick,
+  Phone,
+  Router,
+  Wifi,
+} from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { InspectTrigger } from "./inspector";
 import { MAP_TALL, MAP_WIDE, type ExposureMap, type MapGeometry, type MapIcon, type MapNode, type Tone } from "./model";
-import { LiveDot, Panel } from "./panel";
+import { Panel } from "./panel";
 
 const ICONS: Record<Exclude<MapIcon, "you">, React.ComponentType<{ className?: string }>> = {
   email: AtSign,
@@ -48,10 +61,17 @@ function pct(value: number, total: number): string {
   return `${(value / total) * 100}%`;
 }
 
+/*
+ * Rótulos em três níveis, para o mapa não virar parede de texto: o anel de dentro sempre mostra nome
+ * e resumo; na borda, o resumo só aparece quando pede atenção (grave ou atenção), e os pontos apagados
+ * (sem achado) só mostram o nome ao passar o mouse ou focar. O nome completo está sempre no aria-label.
+ */
 function Node({ node, geo, compact }: { node: MapNode; geo: MapGeometry; compact: boolean }) {
   const isYou = node.icon === "you";
   const Icon = node.icon === "you" ? null : ICONS[node.icon];
   const size = isYou ? "size-14" : node.ring === 1 ? "size-10" : node.dim ? "size-7" : "size-8";
+  const showSub = node.sub !== null && !compact && (node.ring === 1 || node.tone === "danger" || node.tone === "warning");
+  const revealOnHover = node.ring === 2 && node.dim;
   return (
     <InspectTrigger
       target={node.target}
@@ -82,8 +102,11 @@ function Node({ node, geo, compact }: { node: MapNode; geo: MapGeometry; compact
       </span>
       <span
         className={cn(
-          "pointer-events-none absolute top-full left-1/2 mt-1 flex -translate-x-1/2 flex-col items-center leading-tight whitespace-nowrap",
+          // O halo da cor do fundo deixa o rótulo legível quando uma ligação passa por baixo dele.
+          "pointer-events-none absolute top-full left-1/2 mt-1 flex -translate-x-1/2 flex-col items-center leading-tight whitespace-nowrap [text-shadow:0_0_4px_var(--background),0_0_8px_var(--background)]",
           compact && node.ring === 2 && "hidden",
+          revealOnHover &&
+            "opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
         )}
       >
         <span
@@ -96,9 +119,7 @@ function Node({ node, geo, compact }: { node: MapNode; geo: MapGeometry; compact
         >
           {compact ? (node.compactLabel ?? node.label) : node.label}
         </span>
-        {node.sub && !compact && (
-          <span className={cn("font-mono text-[9.5px] tracking-wide", SUB_TONE[node.tone])}>{node.sub}</span>
-        )}
+        {showSub && <span className={cn("font-mono text-[9.5px] tracking-wide", SUB_TONE[node.tone])}>{node.sub}</span>}
       </span>
     </InspectTrigger>
   );
@@ -117,10 +138,7 @@ function MapCanvas({
 }) {
   const { width, height, cx, cy, inner, outer } = geo;
   return (
-    <div
-      className={cn("relative mx-auto w-full max-w-[860px]", className)}
-      style={{ aspectRatio: `${width} / ${height}` }}
-    >
+    <div className={cn("relative mx-auto w-full", className)} style={{ aspectRatio: `${width} / ${height}` }}>
       {/* Varredura do radar, achatada na elipse do anel de fora. */}
       <div
         className="pointer-events-none absolute aspect-square"
@@ -177,78 +195,67 @@ function MapCanvas({
   );
 }
 
-const READOUT_POSITION = {
-  identity: "top-3 left-3",
-  network: "bottom-3 left-3",
-  accounts: "bottom-3 right-3 items-end text-right",
-} as const;
-
 /** Mapa de exposição: você no centro, seus dados e redes ao redor, e o que ameaça cada um na borda. */
 export function ExposureMapPanel({
   wide,
   tall,
+  footer,
   className,
 }: {
   wide: ExposureMap;
   tall: ExposureMap;
+  /** Resumo dos setores, no rodapé do mapa. */
+  footer?: React.ReactNode;
   className?: string;
 }) {
   return (
     <Panel
       id="mapa-titulo"
-      index="02"
+      index="03"
       label="Mapa de exposição"
       className={className}
-      bodyClassName="justify-center"
       aside={
-        <span className="flex items-center gap-2 font-mono text-[10.5px] tracking-wider text-success uppercase">
-          <LiveDot />
-          Vigiando
+        <span className="flex shrink-0 items-center gap-1.5 font-mono text-[10.5px] text-muted-foreground">
+          <MousePointerClick className="size-3.5 text-telemetry" aria-hidden />
+          Toque num ponto<span className="max-sm:hidden"> para ver</span>
         </span>
       }
     >
-      <div className="relative px-2 pt-2 pb-3 sm:px-4">
+      {/*
+       * Do lg em diante, o corpo vira um contêiner de tamanho: a altura vem da coluna da esquerda e o
+       * mapa ocupa o maior tamanho que cabe nela, mantendo a proporção do MAP_WIDE (640 / 500 = 1,28).
+       */}
+      <div className="relative flex flex-1 flex-col justify-center px-2 py-3 sm:px-4 lg:min-h-[420px] lg:[container-type:size]">
         <div
-          className="absolute inset-0 bg-grid opacity-60 [mask-image:radial-gradient(ellipse_at_50%_50%,black_20%,transparent_72%)]"
+          className="absolute inset-0 bg-grid opacity-50 [mask-image:radial-gradient(ellipse_at_50%_50%,black_20%,transparent_70%)]"
           aria-hidden
         />
-        <MapCanvas map={wide} geo={MAP_WIDE} className="max-sm:hidden" />
-        <MapCanvas map={tall} geo={MAP_TALL} compact className="sm:hidden" />
-
-        {/* Leituras dos três setores, nos cantos (no celular, embaixo do mapa). */}
-        <dl className="relative mt-2 grid grid-cols-3 gap-2 sm:contents">
-          {wide.readouts.map((readout) => (
-            <div
-              key={readout.sector}
-              className={cn("flex flex-col gap-0.5 sm:absolute", READOUT_POSITION[readout.sector])}
-            >
-              <dt className="eyebrow text-[9.5px] text-rubi">{readout.label}</dt>
-              <dd className="font-mono text-[10.5px] text-muted-foreground">{readout.value}</dd>
-            </div>
-          ))}
-        </dl>
+        <MapCanvas
+          map={wide}
+          geo={MAP_WIDE}
+          className="max-w-[860px] max-sm:hidden lg:w-[min(100%,calc(100cqh*1.28))]"
+        />
+        <MapCanvas map={tall} geo={MAP_TALL} compact className="max-w-[420px] sm:hidden" />
 
         <ul
-          className="relative mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] text-muted-foreground sm:absolute sm:top-3 sm:right-3 sm:mt-0 sm:flex-col sm:items-end sm:gap-1"
+          className="relative mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] text-muted-foreground sm:absolute sm:top-3 sm:left-4 sm:mt-0 sm:flex-col sm:items-start sm:gap-1"
           aria-label="Legenda do mapa"
         >
           <li className="flex items-center gap-1.5">
-            Novo ou grave <span className="size-2 rounded-full bg-danger" aria-hidden />
+            <span className="size-2 rounded-full bg-danger" aria-hidden /> Novo ou grave
           </li>
           <li className="flex items-center gap-1.5">
-            Atenção <span className="size-2 rounded-full bg-warning" aria-hidden />
+            <span className="size-2 rounded-full bg-warning" aria-hidden /> Atenção
           </li>
           <li className="flex items-center gap-1.5">
-            Corrigido pelo agente{" "}
             <span className="flex h-3 items-center rounded-full bg-success px-1 text-[8px] font-bold text-background" aria-hidden>
               ✓
-            </span>
-          </li>
-          <li className="flex items-center gap-1.5">
-            <CircleUserRound className="size-3" aria-hidden /> Toque num ponto para ver
+            </span>{" "}
+            Corrigido pelo agente
           </li>
         </ul>
       </div>
+      {footer}
     </Panel>
   );
 }

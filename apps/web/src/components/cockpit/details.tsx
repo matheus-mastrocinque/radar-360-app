@@ -27,10 +27,12 @@ import type { AccountItem, AccountList } from "@/lib/accounts";
 import type { BreachItem, Dashboard, DataClass, Finding, ScanSummary } from "@/lib/dashboard";
 import { formatDate, formatMonth, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ActivityList } from "./activity-feed";
 import type { InspectorPanel } from "./inspector";
 import { InspectTrigger } from "./inspector";
 import {
   AGENT_FIXABLE_KINDS,
+  buildActivity,
   deviceName,
   FINDING_POINTS,
   findingsOfDevice,
@@ -595,6 +597,12 @@ export function buildPanels(dashboard: Dashboard, accounts: AccountList | null):
     eyebrow: "Score de exposição",
     title: "Como calculamos o seu score",
     content: <ScoreDetail score={dashboard.score} />,
+  };
+
+  panels.activity = {
+    eyebrow: "Monitoramento e agente",
+    title: "Linha do tempo",
+    content: <ActivityList items={buildActivity(dashboard)} now={dashboard.generatedAt} />,
   };
 
   panels.breaches = {
